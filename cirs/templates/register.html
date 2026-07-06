@@ -36,10 +36,10 @@
                 <label for="password">Password</label>
                 <input type="password" class="form-control" id="password" name="password" required placeholder="Choose a password" minlength="6">
             </div>
-            <button type="submit" class="btn btn-primary" style="width:100%">Register</button>
+            <button type="submit" class="btn btn-primary btn-block">Register</button>
         </form>
 
-        <div style="text-align:center;margin-top:12px;font-size:13px;color:#6b7280;">
+        <div class="auth-footer-link">
             Already have an account? <a href="{{ url_for('login') }}">Login</a>
         </div>
     </div>

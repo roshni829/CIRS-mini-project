@@ -35,7 +35,7 @@
                 <h2>All Complaints</h2>
                 <div class="user-info">
                     <span class="name">{{ session['name'] }}</span>
-                    <span style="font-size:12px;color:#9ca3af;">{{ complaints|length }} total</span>
+                    <span class="count-label">{{ complaints|length }} total</span>
                 </div>
             </div>
 
@@ -109,7 +109,7 @@
                                         <td>{{ complaint.category }}</td>
                                         <td>{{ complaint.location }}</td>
                                         <td>
-                                            <span style="font-weight:500;">{{ complaint.affected_users }}</span>
+                                            <span class="affected-count">{{ complaint.affected_users }}</span>
                                         </td>
                                         <td>
                                             <span class="badge

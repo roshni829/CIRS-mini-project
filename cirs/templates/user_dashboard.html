@@ -58,7 +58,7 @@
             <div class="card">
                 <div class="card-header">
                     Complaints Raised by Me
-                    <span style="float:right;font-weight:400;font-size:12px;color:#6b7280;">{{ my_complaints|length }} total</span>
+                    <span class="count-label">{{ my_complaints|length }} total</span>
                 </div>
                 <div class="card-body">
                     {% if my_complaints %}
@@ -103,7 +103,7 @@
             <div class="card">
                 <div class="card-header">
                     Complaints I Joined
-                    <span style="float:right;font-weight:400;font-size:12px;color:#6b7280;">{{ joined|length }} total</span>
+                    <span class="count-label">{{ joined|length }} total</span>
                 </div>
                 <div class="card-body">
                     {% if joined %}
@@ -147,7 +147,7 @@
             <div class="card">
                 <div class="card-header">
                     Open Complaints
-                    <span style="float:right;font-weight:400;font-size:12px;color:#6b7280;">{{ open_complaints|length }} total</span>
+                    <span class="count-label">{{ open_complaints|length }} total</span>
                 </div>
                 <div class="card-body">
                     {% if open_complaints %}
@@ -172,10 +172,10 @@
                                         {% else %}badge-secondary{% endif %}">
                                         {{ complaint.priority }}
                                     </span>
-                                    <span style="color:#6b7280;">by {{ complaint.creator_name }}</span>
+                                    <span>by {{ complaint.creator_name }}</span>
                                 </div>
                                 <div class="actions">
-                                    <form method="POST" action="{{ url_for('join_complaint', complaint_id=complaint.id) }}" style="display:inline;">
+                                    <form method="POST" action="{{ url_for('join_complaint', complaint_id=complaint.id) }}" class="inline-form">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-success btn-sm">Join</button>
                                     </form>

@@ -62,8 +62,8 @@
                             <input type="text" class="form-control" id="title" name="title" required placeholder="e.g., Wi-Fi not working in Block A" maxlength="200">
                         </div>
 
-                        <div style="display:flex;gap:16px;">
-                            <div class="form-group" style="flex:1;">
+                        <div class="form-row">
+                            <div class="form-group">
                                 <label for="category">Category</label>
                                 <select class="form-control" id="category" name="category" required>
                                     <option value="">Select category</option>
@@ -76,7 +76,7 @@
                                     <option value="Other">Other</option>
                                 </select>
                             </div>
-                            <div class="form-group" style="flex:1;">
+                            <div class="form-group">
                                 <label for="location">Location</label>
                                 <input type="text" class="form-control" id="location" name="location" required placeholder="e.g., Hostel Block A">
                             </div>
@@ -103,7 +103,7 @@
                 <button class="close close-modal">&times;</button>
             </div>
             <div class="modal-body">
-                <p style="font-size:13px;color:#6b7280;margin:0 0 12px 0;">
+                <p>
                     Would you like to join the existing complaint instead of creating a new one?
                 </p>
 
@@ -127,7 +127,7 @@
                             {{ complaint.priority }}
                         </span>
                     </div>
-                    <div style="display:flex;gap:6px;">
+                    <div class="sim-actions">
                         <form method="POST" action="{{ url_for('join_complaint', complaint_id=complaint.id) }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-success btn-sm">Join Complaint</button>
@@ -137,10 +137,10 @@
                 </div>
                 {% endfor %}
 
-                <div style="text-align:center;margin-top:12px;">
+                <div class="modal-create-new">
                     <form method="POST" action="{{ url_for('create_new_complaint') }}" onsubmit="return confirm('Create a new complaint anyway?');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm" style="color:#6b7280;">Create New Complaint</button>
+                        <button type="submit" class="btn btn-sm" style="color:#6b7280;">Create New Complaint Anyway</button>
                     </form>
                 </div>
             </div>
