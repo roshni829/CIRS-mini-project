@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit Complaint - CIRS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>Issue Portal</h1>
+                <div class="subtitle">CIRS</div>
+            </div>
+            <div class="sidebar-nav">
+                <a href="{{ url_for('user_dashboard') }}">
+                    <span class="icon">&#9632;</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{{ url_for('submit_complaint') }}" class="active">
+                    <span class="icon">+</span>
+                    <span>New Complaint</span>
+                </a>
+                <a href="{{ url_for('logout') }}">
+                    <span class="icon">&larr;</span>
+                    <span>Logout</span>
+                </a>
+            </div>
+            <div class="sidebar-footer">
+                {{ session['name'] }}
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="top-bar">
+                <h2>Submit a Complaint</h2>
+                <div class="user-info">
+                    <span class="name">{{ session['name'] }}</span>
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            {{ message }}
+                            <button class="close" onclick="this.parentElement.remove()">&times;</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('submit_complaint') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="form-group">
+                            <label for="title">Complaint Title</label>
+                            <input type="text" class="form-control" id="title" name="title" required placeholder="e.g., Wi-Fi not working in Block A" maxlength="200">
+                        </div>
+
+                        <div style="display:flex;gap:16px;">
+                            <div class="form-group" style="flex:1;">
+                                <label for="category">Category</label>
+                                <select class="form-control" id="category" name="category" required>
+                                    <option value="">Select category</option>
+                                    <option value="Wi-Fi">Wi-Fi</option>
+                                    <option value="Electricity">Electricity</option>
+                                    <option value="Water">Water</option>
+                                    <option value="Cleanliness">Cleanliness</option>
+                                    <option value="Classroom">Classroom</option>
+                                    <option value="Hostel">Hostel</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex:1;">
+                                <label for="location">Location</label>
+                                <input type="text" class="form-control" id="location" name="location" required placeholder="e.g., Hostel Block A">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="description">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="4" required placeholder="Describe the issue."></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Submit</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Similar Complaint Modal -->
+    {% if show_similar_modal and similar %}
+    <div class="modal-overlay active" id="similarModal">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>A similar complaint already exists.</span>
+                <button class="close close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:#6b7280;margin:0 0 12px 0;">
+                    Would you like to join the existing complaint instead of creating a new one?
+                </p>
+
+                {% for complaint in similar %}
+                <div class="similar-item">
+                    <h5>{{ complaint.title }}</h5>
+                    <div class="sim-details">
+                        <span>{{ complaint.category }}</span>
+                        <span>{{ complaint.location }}</span>
+                        <span class="badge
+                            {% if complaint.status == 'Pending' %}badge-warning
+                            {% elif complaint.status == 'In Progress' %}badge-info
+                            {% else %}badge-success{% endif %}">
+                            {{ complaint.status }}
+                        </span>
+                        <span>{{ complaint.affected_users }} affected</span>
+                        <span class="badge
+                            {% if complaint.priority == 'High' %}badge-danger
+                            {% elif complaint.priority == 'Medium' %}badge-warning
+                            {% else %}badge-secondary{% endif %}">
+                            {{ complaint.priority }}
+                        </span>
+                    </div>
+                    <div style="display:flex;gap:6px;">
+                        <form method="POST" action="{{ url_for('join_complaint', complaint_id=complaint.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-success btn-sm">Join Complaint</button>
+                        </form>
+                        <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details</a>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <div style="text-align:center;margin-top:12px;">
+                    <form method="POST" action="{{ url_for('create_new_complaint') }}" onsubmit="return confirm('Create a new complaint anyway?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm" style="color:#6b7280;">Create New Complaint</button>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm close-modal">Close</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

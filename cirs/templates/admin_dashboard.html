@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Issue Management - CIRS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>Issue Management</h1>
+                <div class="subtitle">CIRS Admin</div>
+            </div>
+            <div class="sidebar-nav">
+                <a href="{{ url_for('admin_dashboard') }}" class="active">
+                    <span class="icon">&#9632;</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{{ url_for('logout') }}">
+                    <span class="icon">&larr;</span>
+                    <span>Logout</span>
+                </a>
+            </div>
+            <div class="sidebar-footer">
+                {{ session['name'] }}
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="top-bar">
+                <h2>All Complaints</h2>
+                <div class="user-info">
+                    <span class="name">{{ session['name'] }}</span>
+                    <span style="font-size:12px;color:#9ca3af;">{{ complaints|length }} total</span>
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            {{ message }}
+                            <button class="close" onclick="this.parentElement.remove()">&times;</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Filter bar -->
+            <div class="filter-bar">
+                <form method="GET" action="{{ url_for('admin_dashboard') }}" class="filter-form">
+                    <div class="filter-group">
+                        <label for="status">Status</label>
+                        <select name="status" id="status" class="form-control filter-select">
+                            <option value="">All</option>
+                            <option value="Pending" {% if status_filter == 'Pending' %}selected{% endif %}>Pending</option>
+                            <option value="In Progress" {% if status_filter == 'In Progress' %}selected{% endif %}>In Progress</option>
+                            <option value="Resolved" {% if status_filter == 'Resolved' %}selected{% endif %}>Resolved</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="category">Category</label>
+                        <select name="category" id="category" class="form-control filter-select">
+                            <option value="">All</option>
+                            <option value="Wi-Fi" {% if category_filter == 'Wi-Fi' %}selected{% endif %}>Wi-Fi</option>
+                            <option value="Electricity" {% if category_filter == 'Electricity' %}selected{% endif %}>Electricity</option>
+                            <option value="Water" {% if category_filter == 'Water' %}selected{% endif %}>Water</option>
+                            <option value="Cleanliness" {% if category_filter == 'Cleanliness' %}selected{% endif %}>Cleanliness</option>
+                            <option value="Classroom" {% if category_filter == 'Classroom' %}selected{% endif %}>Classroom</option>
+                            <option value="Hostel" {% if category_filter == 'Hostel' %}selected{% endif %}>Hostel</option>
+                            <option value="Other" {% if category_filter == 'Other' %}selected{% endif %}>Other</option>
+                        </select>
+                    </div>
+                    <div class="filter-actions">
+                        <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                        {% if status_filter or category_filter %}
+                            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-sm">Clear</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Complaint</th>
+                                <th>Category</th>
+                                <th>Location</th>
+                                <th>Affected</th>
+                                <th>Priority</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if complaints %}
+                                {% for complaint in complaints %}
+                                    <tr>
+                                        <td>
+                                            <div class="complaint-title">{{ complaint.title }}</div>
+                                            <div class="meta">by {{ complaint.creator_name }}</div>
+                                        </td>
+                                        <td>{{ complaint.category }}</td>
+                                        <td>{{ complaint.location }}</td>
+                                        <td>
+                                            <span style="font-weight:500;">{{ complaint.affected_users }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge
+                                                {% if complaint.priority == 'High' %}badge-danger
+                                                {% elif complaint.priority == 'Medium' %}badge-warning
+                                                {% else %}badge-secondary{% endif %}">
+                                                {{ complaint.priority }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge
+                                                {% if complaint.status == 'Pending' %}badge-warning
+                                                {% elif complaint.status == 'In Progress' %}badge-info
+                                                {% else %}badge-success{% endif %}">
+                                                {{ complaint.status }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <form method="POST" action="{{ url_for('update_status', complaint_id=complaint.id) }}" class="status-form">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <select name="status">
+                                                    <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
+                                                    <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                                                    <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
+                                                </select>
+                                                <button type="submit" class="btn btn-sm">Update</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="7">
+                                        <div class="empty-state">
+                                            <p>No complaints found.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

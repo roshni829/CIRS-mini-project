@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - CIRS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="auth-page">
+    <div class="auth-box">
+        <h2>Login</h2>
+        <p class="subtitle">Enter your email and password to continue.</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">
+                        {{ message }}
+                        <button class="close" onclick="this.parentElement.remove()">&times;</button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" class="form-control" id="email" name="email" required placeholder="you@example.com">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" class="form-control" id="password" name="password" required placeholder="Enter your password">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%">Login</button>
+        </form>
+
+        <div style="text-align:center;margin-top:12px;font-size:13px;color:#6b7280;">
+            Don't have an account? <a href="{{ url_for('register') }}">Register</a>
+        </div>
+
+        <div class="demo-info">
+            <strong>Demo accounts</strong><br>
+            User: <code>student1@gmail.com</code> / <code>password123</code><br>
+            Admin: <code>admin@gmail.com</code> / <code>admin123</code>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

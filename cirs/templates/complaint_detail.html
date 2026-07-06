@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complaint #{{ complaint.id }} - CIRS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>{% if session['role'] == 'admin' %}Issue Management{% else %}Issue Portal{% endif %}</h1>
+                <div class="subtitle">CIRS</div>
+            </div>
+            <div class="sidebar-nav">
+                <a href="{% if session['role'] == 'admin' %}{{ url_for('admin_dashboard') }}{% else %}{{ url_for('user_dashboard') }}{% endif %}">
+                    <span class="icon">&#9632;</span>
+                    <span>Dashboard</span>
+                </a>
+                {% if session['role'] != 'admin' %}
+                <a href="{{ url_for('submit_complaint') }}">
+                    <span class="icon">+</span>
+                    <span>New Complaint</span>
+                </a>
+                {% endif %}
+                <a href="{{ url_for('logout') }}">
+                    <span class="icon">&larr;</span>
+                    <span>Logout</span>
+                </a>
+            </div>
+            <div class="sidebar-footer">
+                {{ session['name'] }}
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="top-bar">
+                <h2>Complaint #{{ complaint.id }}</h2>
+                <div class="user-info">
+                    <a href="{% if session['role'] == 'admin' %}{{ url_for('admin_dashboard') }}{% else %}{{ url_for('user_dashboard') }}{% endif %}" class="btn btn-sm">&larr; Back</a>
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            {{ message }}
+                            <button class="close" onclick="this.parentElement.remove()">&times;</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="detail-grid">
+                <div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="detail-section">
+                                <h3>{{ complaint.title }}</h3>
+                                <span style="font-size:12px;color:#6b7280;">Reported by {{ complaint.creator_name }}</span>
+                            </div>
+
+                            <div class="field-row">
+                                <div>
+                                    <span class="label">Category</span>
+                                    <span class="value">{{ complaint.category }}</span>
+                                </div>
+                                <div>
+                                    <span class="label">Location</span>
+                                    <span class="value">{{ complaint.location }}</span>
+                                </div>
+                                <div>
+                                    <span class="label">Priority</span>
+                                    <span class="badge
+                                        {% if complaint.priority == 'High' %}badge-danger
+                                        {% elif complaint.priority == 'Medium' %}badge-warning
+                                        {% else %}badge-secondary{% endif %}">
+                                        {{ complaint.priority }}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="label">Status</span>
+                                    <span class="badge
+                                        {% if complaint.status == 'Pending' %}badge-warning
+                                        {% elif complaint.status == 'In Progress' %}badge-info
+                                        {% else %}badge-success{% endif %}">
+                                        {{ complaint.status }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="detail-section">
+                                <span class="label">Description</span>
+                                <p style="margin:4px 0 0 0;font-size:14px;">{{ complaint.description }}</p>
+                            </div>
+
+                            <div style="font-size:12px;color:#9ca3af;display:flex;gap:16px;">
+                                <span>Created: {{ complaint.created_at }}</span>
+                                <span>Updated: {{ complaint.updated_at }}</span>
+                            </div>
+
+                            {% if session['role'] == 'admin' %}
+                            <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;">
+                            <div class="detail-section">
+                                <span class="label">Update Status</span>
+                                <form method="POST" action="{{ url_for('update_status', complaint_id=complaint.id) }}" style="margin-top:6px;display:flex;gap:6px;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <select class="form-control" name="status" style="width:auto;">
+                                        <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
+                                        <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                                        <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                                </form>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="affected-count-box">
+                        <div class="number">{{ affected_count }}</div>
+                        <div class="label">Affected Users</div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">Joined Users</div>
+                        <div class="card-body user-list">
+                            {% for user in affected_users %}
+                            <div class="user-row">
+                                <div class="initial">{{ user.name[0] }}</div>
+                                <div>
+                                    <div style="font-weight:500;">{{ user.name }}</div>
+                                    <div style="font-size:11px;color:#9ca3af;">
+                                        {% if user.role == 'creator' %}Creator{% else %}Joined {{ user.joined_at[:16] }}{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div style="font-size:12px;color:#9ca3af;text-align:center;padding:8px 0;">No users yet.</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    {% if history %}
+                    <div class="card">
+                        <div class="card-header">Activity</div>
+                        <div class="card-body" style="padding:8px 16px;">
+                            {% for entry in history %}
+                            <div style="display:flex;gap:8px;padding:6px 0;font-size:13px;border-bottom:1px solid #f3f4f6;">
+                                <span style="color:#9ca3af;white-space:nowrap;">{{ entry.created_at[:16] }}</span>
+                                <span style="color:#1f2937;">{{ entry.action }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

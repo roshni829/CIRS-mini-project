@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Issue Portal - CIRS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>Issue Portal</h1>
+                <div class="subtitle">CIRS</div>
+            </div>
+            <div class="sidebar-nav">
+                <a href="{{ url_for('user_dashboard') }}" class="active">
+                    <span class="icon">&#9632;</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{{ url_for('submit_complaint') }}">
+                    <span class="icon">+</span>
+                    <span>New Complaint</span>
+                </a>
+                <a href="{{ url_for('logout') }}">
+                    <span class="icon">&larr;</span>
+                    <span>Logout</span>
+                </a>
+            </div>
+            <div class="sidebar-footer">
+                {{ session['name'] }}
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="top-bar">
+                <h2>Dashboard</h2>
+                <div class="user-info">
+                    <span class="name">{{ session['name'] }}</span>
+                    <a href="{{ url_for('submit_complaint') }}" class="btn btn-primary btn-sm">+ New Complaint</a>
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            {{ message }}
+                            <button class="close" onclick="this.parentElement.remove()">&times;</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Complaints Raised by Me -->
+            <div class="card">
+                <div class="card-header">
+                    Complaints Raised by Me
+                    <span style="float:right;font-weight:400;font-size:12px;color:#6b7280;">{{ my_complaints|length }} total</span>
+                </div>
+                <div class="card-body">
+                    {% if my_complaints %}
+                        {% for complaint in my_complaints %}
+                            <div class="complaint-item">
+                                <div class="title-row">
+                                    <h4>{{ complaint.title }}</h4>
+                                    <span class="badge
+                                        {% if complaint.status == 'Pending' %}badge-warning
+                                        {% elif complaint.status == 'In Progress' %}badge-info
+                                        {% else %}badge-success{% endif %}">
+                                        {{ complaint.status }}
+                                    </span>
+                                </div>
+                                <div class="details">
+                                    <span>{{ complaint.category }}</span>
+                                    <span>{{ complaint.location }}</span>
+                                    <span>{{ complaint.affected_users }} affected</span>
+                                    <span class="badge
+                                        {% if complaint.priority == 'High' %}badge-danger
+                                        {% elif complaint.priority == 'Medium' %}badge-warning
+                                        {% else %}badge-secondary{% endif %}">
+                                        {{ complaint.priority }}
+                                    </span>
+                                    <span>Created: {{ complaint.created_at[:16] }}</span>
+                                </div>
+                                <div class="actions">
+                                    <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View</a>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <p>No complaints found.</p>
+                            <a href="{{ url_for('submit_complaint') }}" class="btn btn-primary btn-sm">Submit a complaint</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Complaints I Joined -->
+            <div class="card">
+                <div class="card-header">
+                    Complaints I Joined
+                    <span style="float:right;font-weight:400;font-size:12px;color:#6b7280;">{{ joined|length }} total</span>
+                </div>
+                <div class="card-body">
+                    {% if joined %}
+                        {% for complaint in joined %}
+                            <div class="complaint-item">
+                                <div class="title-row">
+                                    <h4>{{ complaint.title }}</h4>
+                                    <span class="badge
+                                        {% if complaint.status == 'Pending' %}badge-warning
+                                        {% elif complaint.status == 'In Progress' %}badge-info
+                                        {% else %}badge-success{% endif %}">
+                                        {{ complaint.status }}
+                                    </span>
+                                </div>
+                                <div class="details">
+                                    <span>{{ complaint.category }}</span>
+                                    <span>{{ complaint.location }}</span>
+                                    <span>{{ complaint.affected_users }} affected</span>
+                                    <span class="badge
+                                        {% if complaint.priority == 'High' %}badge-danger
+                                        {% elif complaint.priority == 'Medium' %}badge-warning
+                                        {% else %}badge-secondary{% endif %}">
+                                        {{ complaint.priority }}
+                                    </span>
+                                    <span>Joined: {{ complaint.joined_on[:16] }}</span>
+                                </div>
+                                <div class="actions">
+                                    <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View</a>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <p>No complaints found.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Open Complaints (for joining) -->
+            <div class="card">
+                <div class="card-header">
+                    Open Complaints
+                    <span style="float:right;font-weight:400;font-size:12px;color:#6b7280;">{{ open_complaints|length }} total</span>
+                </div>
+                <div class="card-body">
+                    {% if open_complaints %}
+                        {% for complaint in open_complaints %}
+                            <div class="complaint-item">
+                                <div class="title-row">
+                                    <h4>{{ complaint.title }}</h4>
+                                    <span class="badge
+                                        {% if complaint.status == 'Pending' %}badge-warning
+                                        {% elif complaint.status == 'In Progress' %}badge-info
+                                        {% else %}badge-success{% endif %}">
+                                        {{ complaint.status }}
+                                    </span>
+                                </div>
+                                <div class="details">
+                                    <span>{{ complaint.category }}</span>
+                                    <span>{{ complaint.location }}</span>
+                                    <span>{{ complaint.affected_users }} affected</span>
+                                    <span class="badge
+                                        {% if complaint.priority == 'High' %}badge-danger
+                                        {% elif complaint.priority == 'Medium' %}badge-warning
+                                        {% else %}badge-secondary{% endif %}">
+                                        {{ complaint.priority }}
+                                    </span>
+                                    <span style="color:#6b7280;">by {{ complaint.creator_name }}</span>
+                                </div>
+                                <div class="actions">
+                                    <form method="POST" action="{{ url_for('join_complaint', complaint_id=complaint.id) }}" style="display:inline;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-success btn-sm">Join</button>
+                                    </form>
+                                    <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View</a>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <p>No open complaints to join.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
