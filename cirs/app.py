@@ -9,7 +9,9 @@ app = Flask(__name__)
 app.secret_key = os.urandom(24).hex()
 csrf = CSRFProtect(app)
 
-DATABASE = os.path.join(os.path.dirname(__file__), 'database.db')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "database.db")
+DATABASE = DB_PATH
 
 
 # ─── Database helpers ───────────────────────────────────────────────────────────
@@ -537,8 +539,10 @@ def update_status(complaint_id):
 
 # ─── Main ───────────────────────────────────────────────────────────────────────
 
+# Initialize database for both local and Render
+with app.app_context():
+    init_db()
+    seed_demo_data()
+
 if __name__ == '__main__':
-    with app.app_context():
-        init_db()
-        seed_demo_data()
     app.run(debug=True, host='0.0.0.0', port=5000)
