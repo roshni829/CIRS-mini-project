@@ -42,4 +42,19 @@ document.addEventListener('DOMContentLoaded', function () {
     if (modalOverlay && modalOverlay.classList.contains('active')) {
         // Already shown via server-rendered class
     }
+
+    // ─── Live status polling every 10 seconds ────────────────────────────
+    setInterval(function () {
+        fetch('/api/my-complaints')
+            .then(function (response) { return response.json(); })
+            .then(function (data) {
+                data.complaints.forEach(function (c) {
+                    var statusEl = document.getElementById('status-' + c.id);
+                    var countEl = document.getElementById('count-' + c.id);
+                    if (statusEl) statusEl.innerText = c.status;
+                    if (countEl) countEl.innerText = c.affected_users;
+                });
+            })
+            .catch(function (error) { console.log(error); });
+    }, 10000);
 });

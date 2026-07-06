@@ -109,7 +109,7 @@
                                         <td>{{ complaint.category }}</td>
                                         <td>{{ complaint.location }}</td>
                                         <td>
-                                            <span class="affected-count">{{ complaint.affected_users }}</span>
+                                            <span id="count-{{ complaint.id }}" class="affected-count">{{ complaint.affected_users }}</span>
                                         </td>
                                         <td>
                                             <span class="badge
@@ -120,7 +120,7 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="badge
+                                            <span id="status-{{ complaint.id }}" class="badge
                                                 {% if complaint.status == 'Pending' %}badge-warning
                                                 {% elif complaint.status == 'In Progress' %}badge-info
                                                 {% else %}badge-success{% endif %}">

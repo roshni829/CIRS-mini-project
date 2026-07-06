@@ -1,32 +1,73 @@
-import sqlite3
 import os
 import re
+import sqlite3
+from datetime import timedelta
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, session, g, flash
+from flask import Flask, render_template, request, redirect, url_for, session, g, flash, jsonify
 from flask_wtf.csrf import CSRFProtect
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24).hex()
+app.secret_key = "cirs-mini-project-fixed-secret-key"
+app.permanent_session_lifetime = timedelta(hours=3)
 csrf = CSRFProtect(app)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "database.db")
-DATABASE = DB_PATH
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 
-# ─── Database helpers ───────────────────────────────────────────────────────────
+# ─── Database layer (supports PostgreSQL + SQLite fallback) ─────────────────────
 
-def get_db():
-    if 'db' not in g:
-        g.db = sqlite3.connect(DATABASE)
-        g.db.row_factory = sqlite3.Row
-    return g.db
+if DATABASE_URL:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
 
+    def get_db():
+        if 'db' not in g:
+            g.db = psycopg2.connect(DATABASE_URL)
+            g.db._is_postgres = True
+        return g.db
 
-def close_db(exception=None):
-    db = g.pop('db', None)
-    if db is not None:
-        db.close()
+    def close_db(exception=None):
+        db = g.pop('db', None)
+        if db is not None:
+            db.close()
+
+    def db_execute(db, sql, params=None):
+        """Execute a query, converting SQLite dialect to PostgreSQL."""
+        pg_sql = sql.replace('?', '%s')
+        pg_sql = pg_sql.replace('INSERT OR IGNORE INTO', 'INSERT INTO')
+
+        cur = db.cursor(cursor_factory=RealDictCursor)
+        if params:
+            cur.execute(pg_sql, params)
+        else:
+            cur.execute(pg_sql)
+        # Map .lastrowid for code that uses RETURNING id
+        if pg_sql.strip().upper().startswith("INSERT") and "RETURNING" in pg_sql.upper():
+            row = cur.fetchone()
+            cur._lastrowid = row['id'] if row else None
+        else:
+            cur._lastrowid = None
+        return cur
+
+else:
+    def get_db():
+        if 'db' not in g:
+            g.db = sqlite3.connect(DB_PATH)
+            g.db.row_factory = sqlite3.Row
+        return g.db
+
+    def close_db(exception=None):
+        db = g.pop('db', None)
+        if db is not None:
+            db.close()
+
+    def db_execute(db, sql, params=None):
+        if params:
+            return db.execute(sql, params)
+        return db.execute(sql)
 
 
 app.teardown_appcontext(close_db)
@@ -34,18 +75,19 @@ app.teardown_appcontext(close_db)
 
 def init_db():
     db = get_db()
-    db.executescript("""
-        CREATE TABLE IF NOT EXISTS users (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    # Use SERIAL for PostgreSQL, INTEGER for SQLite fallback
+    id_type = "SERIAL" if DATABASE_URL else "INTEGER"
+    statements = [
+        f"""CREATE TABLE IF NOT EXISTS users (
+            id          {id_type} PRIMARY KEY,
             name        TEXT    NOT NULL,
             email       TEXT    UNIQUE NOT NULL,
             password    TEXT    NOT NULL,
             role        TEXT    NOT NULL DEFAULT 'user',
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS complaints (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS complaints (
+            id          {id_type} PRIMARY KEY,
             title       TEXT    NOT NULL,
             description TEXT    NOT NULL,
             category    TEXT    NOT NULL,
@@ -56,10 +98,9 @@ def init_db():
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (created_by) REFERENCES users(id)
-        );
-
-        CREATE TABLE IF NOT EXISTS complaint_users (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS complaint_users (
+            id            {id_type} PRIMARY KEY,
             complaint_id  INTEGER NOT NULL,
             user_id       INTEGER NOT NULL,
             role          TEXT    NOT NULL DEFAULT 'joined',
@@ -67,18 +108,19 @@ def init_db():
             FOREIGN KEY (complaint_id) REFERENCES complaints(id),
             FOREIGN KEY (user_id) REFERENCES users(id),
             UNIQUE(complaint_id, user_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS complaint_history (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS complaint_history (
+            id            {id_type} PRIMARY KEY,
             complaint_id  INTEGER NOT NULL,
             user_id       INTEGER NOT NULL,
             action        TEXT    NOT NULL,
             created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (complaint_id) REFERENCES complaints(id),
             FOREIGN KEY (user_id) REFERENCES users(id)
-        );
-    """)
+        )""",
+    ]
+    for sql in statements:
+        db_execute(db, sql)
     db.commit()
 
 
@@ -86,19 +128,19 @@ def init_db():
 
 def seed_demo_data():
     db = get_db()
-    existing = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    existing = db_execute(db, "SELECT COUNT(*) FROM users").fetchone()[0]
     if existing > 0:
         return
 
-    db.execute(
+    db_execute(db,
         "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
         ('Student One', 'student1@gmail.com', generate_password_hash('password123'), 'user')
     )
-    db.execute(
+    db_execute(db,
         "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
         ('Student Two', 'student2@gmail.com', generate_password_hash('password123'), 'user')
     )
-    db.execute(
+    db_execute(db,
         "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
         ('Admin User', 'admin@gmail.com', generate_password_hash('admin123'), 'admin')
     )
@@ -123,7 +165,7 @@ def compute_similarity(title1, desc1, title2, desc2):
 
 def find_similar_complaints(title, description, category, location):
     db = get_db()
-    rows = db.execute(
+    rows = db_execute(db,
         "SELECT * FROM complaints WHERE status != 'Resolved'"
     ).fetchall()
 
@@ -139,7 +181,7 @@ def find_similar_complaints(title, description, category, location):
             sim = max(sim, 0.3)
 
         if sim >= 0.4:
-            count = db.execute(
+            count = db_execute(db,
                 "SELECT COUNT(*) FROM complaint_users WHERE complaint_id = ?",
                 (row['id'],)
             ).fetchone()[0]
@@ -170,12 +212,12 @@ def calculate_priority(affected_count):
 
 def update_priority(complaint_id):
     db = get_db()
-    count = db.execute(
+    count = db_execute(db,
         "SELECT COUNT(*) FROM complaint_users WHERE complaint_id = ?",
         (complaint_id,)
     ).fetchone()[0]
     new_priority = calculate_priority(count)
-    db.execute(
+    db_execute(db,
         "UPDATE complaints SET priority = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (new_priority, complaint_id)
     )
@@ -183,9 +225,6 @@ def update_priority(complaint_id):
 
 
 # ─── Auth helpers ───────────────────────────────────────────────────────────────
-
-from werkzeug.security import check_password_hash, generate_password_hash
-
 
 def login_required(f):
     @wraps(f)
@@ -227,13 +266,13 @@ def register():
             return render_template('register.html')
 
         db = get_db()
-        existing = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        existing = db_execute(db, "SELECT id FROM users WHERE email = ?", (email,)).fetchone()
         if existing:
             flash('Email already registered. Please login.', 'warning')
             return redirect(url_for('login'))
 
         hashed = generate_password_hash(password)
-        db.execute(
+        db_execute(db,
             "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
             (name, email, hashed, 'user')
         )
@@ -251,9 +290,10 @@ def login():
         password = request.form['password']
 
         db = get_db()
-        user = db.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        user = db_execute(db, "SELECT * FROM users WHERE email = ?", (email,)).fetchone()
 
         if user and check_password_hash(user['password'], password):
+            session.permanent = True
             session['user_id'] = user['id']
             session['name'] = user['name']
             session['email'] = user['email']
@@ -284,7 +324,7 @@ def user_dashboard():
     user_id = session['user_id']
 
     # Complaints Raised by Me (where user is creator)
-    my_complaints = db.execute(
+    my_complaints = db_execute(db,
         "SELECT c.*, cu.joined_at AS created_on, "
         "(SELECT COUNT(*) FROM complaint_users cu2 WHERE cu2.complaint_id = c.id) AS affected_users "
         "FROM complaints c JOIN complaint_users cu ON c.id = cu.complaint_id AND cu.user_id = ? AND cu.role = 'creator' "
@@ -293,7 +333,7 @@ def user_dashboard():
     ).fetchall()
 
     # Complaints I Joined (where user is joined)
-    joined = db.execute(
+    joined = db_execute(db,
         "SELECT c.*, cu.joined_at AS joined_on, "
         "(SELECT COUNT(*) FROM complaint_users cu2 WHERE cu2.complaint_id = c.id) AS affected_users "
         "FROM complaints c JOIN complaint_users cu ON c.id = cu.complaint_id "
@@ -302,7 +342,7 @@ def user_dashboard():
     ).fetchall()
 
     # Open complaints: unresolved, user hasn't created or joined
-    open_complaints = db.execute(
+    open_complaints = db_execute(db,
         "SELECT c.*, u.name AS creator_name, "
         "(SELECT COUNT(*) FROM complaint_users cu WHERE cu.complaint_id = c.id) AS affected_users "
         "FROM complaints c JOIN users u ON c.created_by = u.id "
@@ -342,20 +382,21 @@ def submit_complaint():
             return render_template('submit_complaint.html', show_similar_modal=True, similar=similar)
 
         db = get_db()
-        cursor = db.execute(
+        cursor = db_execute(db,
             "INSERT INTO complaints (title, description, category, location, status, priority, created_by) "
-            "VALUES (?, ?, ?, ?, 'Pending', 'Low', ?)",
+            "VALUES (?, ?, ?, ?, 'Pending', 'Low', ?) RETURNING id",
             (title, description, category, location, session['user_id'])
         )
-        complaint_id = cursor.lastrowid
+        complaint_id = cursor.fetchone()[0]
         # Add creator as an affected user with role='creator'
-        db.execute(
-            "INSERT OR IGNORE INTO complaint_users (complaint_id, user_id, role) VALUES (?, ?, 'creator')",
+        db_execute(db,
+            "INSERT INTO complaint_users (complaint_id, user_id, role) VALUES (?, ?, 'creator') "
+            "ON CONFLICT DO NOTHING",
             (complaint_id, session['user_id'])
         )
         # Add history entry
         creator_name = session.get('name', 'User')
-        db.execute(
+        db_execute(db,
             "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
             (complaint_id, session['user_id'], creator_name + ' created complaint')
         )
@@ -375,20 +416,21 @@ def create_new_complaint():
         return redirect(url_for('submit_complaint'))
 
     db = get_db()
-    cursor = db.execute(
+    cursor = db_execute(db,
         "INSERT INTO complaints (title, description, category, location, status, priority, created_by) "
-        "VALUES (?, ?, ?, ?, 'Pending', 'Low', ?)",
+        "VALUES (?, ?, ?, ?, 'Pending', 'Low', ?) RETURNING id",
         (pending['title'], pending['description'], pending['category'], pending['location'], session['user_id'])
     )
-    complaint_id = cursor.lastrowid
+    complaint_id = cursor.fetchone()[0]
     # Add creator as an affected user with role='creator'
-    db.execute(
-        "INSERT OR IGNORE INTO complaint_users (complaint_id, user_id, role) VALUES (?, ?, 'creator')",
+    db_execute(db,
+        "INSERT INTO complaint_users (complaint_id, user_id, role) VALUES (?, ?, 'creator') "
+        "ON CONFLICT DO NOTHING",
         (complaint_id, session['user_id'])
     )
     # Add history entry
     creator_name = session.get('name', 'User')
-    db.execute(
+    db_execute(db,
         "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
         (complaint_id, session['user_id'], creator_name + ' created complaint')
     )
@@ -403,33 +445,24 @@ def join_complaint(complaint_id):
     db = get_db()
     user_id = session['user_id']
 
-    session.pop('pending_complaint', None)
-
-    existing = db.execute(
-        "SELECT id FROM complaint_users WHERE complaint_id = ? AND user_id = ?",
+    cursor = db_execute(db,
+        "INSERT INTO complaint_users (complaint_id, user_id, role) VALUES (?, ?, 'joined') "
+        "ON CONFLICT DO NOTHING",
         (complaint_id, user_id)
-    ).fetchone()
-
-    if existing:
+    )
+    if cursor.rowcount == 0:
         flash('You have already joined this complaint.', 'info')
     else:
-        try:
-            db.execute(
-                "INSERT INTO complaint_users (complaint_id, user_id, role) VALUES (?, ?, 'joined')",
-                (complaint_id, user_id)
-            )
-            db.commit()
-            update_priority(complaint_id)
-            # Add history entry
-            user_name = session.get('name', 'User')
-            db.execute(
-                "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
-                (complaint_id, user_id, user_name + ' joined complaint')
-            )
-            db.commit()
-            flash('You joined this complaint.', 'success')
-        except sqlite3.IntegrityError:
-            flash('You have already joined this complaint.', 'info')
+        db.commit()
+        update_priority(complaint_id)
+        # Add history entry
+        user_name = session.get('name', 'User')
+        db_execute(db,
+            "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+            (complaint_id, user_id, user_name + ' joined complaint')
+        )
+        db.commit()
+        flash('You joined this complaint.', 'success')
 
     return redirect(url_for('user_dashboard'))
 
@@ -471,7 +504,7 @@ def admin_dashboard():
         "  END, c.created_at DESC"
     )
 
-    complaints = db.execute(query, params).fetchall()
+    complaints = db_execute(db, query, params).fetchall()
     return render_template('admin_dashboard.html', complaints=complaints,
                            status_filter=status_filter, category_filter=category_filter)
 
@@ -480,7 +513,7 @@ def admin_dashboard():
 @login_required
 def complaint_detail(complaint_id):
     db = get_db()
-    complaint = db.execute(
+    complaint = db_execute(db,
         "SELECT c.*, u.name AS creator_name "
         "FROM complaints c JOIN users u ON c.created_by = u.id "
         "WHERE c.id = ?",
@@ -491,7 +524,7 @@ def complaint_detail(complaint_id):
         flash('Complaint not found.', 'danger')
         return redirect(url_for('login'))
 
-    affected_users = db.execute(
+    affected_users = db_execute(db,
         "SELECT u.id, u.name, u.email, cu.joined_at, cu.role "
         "FROM complaint_users cu JOIN users u ON cu.user_id = u.id "
         "WHERE cu.complaint_id = ? ORDER BY cu.joined_at",
@@ -501,7 +534,7 @@ def complaint_detail(complaint_id):
     affected_count = len(affected_users)
 
     # Get activity history
-    history = db.execute(
+    history = db_execute(db,
         "SELECT ch.*, u.name AS user_name "
         "FROM complaint_history ch JOIN users u ON ch.user_id = u.id "
         "WHERE ch.complaint_id = ? ORDER BY ch.created_at ASC",
@@ -522,19 +555,42 @@ def update_status(complaint_id):
         return redirect(url_for('admin_dashboard'))
 
     db = get_db()
-    db.execute(
+    db_execute(db,
         "UPDATE complaints SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         (new_status, complaint_id)
     )
     # Add history entry
     admin_name = session.get('name', 'Admin')
-    db.execute(
+    db_execute(db,
         "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
         (complaint_id, session['user_id'], admin_name + ' changed status to ' + new_status)
     )
     db.commit()
     flash('Status updated.', 'success')
     return redirect(url_for('admin_dashboard'))
+
+
+# ─── API Routes ────────────────────────────────────────────────────────────────
+
+@app.route('/api/my-complaints')
+def api_my_complaints():
+    if 'user_id' not in session:
+        return jsonify({'complaints': []})
+
+    db = get_db()
+    user_id = session['user_id']
+
+    complaints = db_execute(db,
+        "SELECT c.id, c.title, c.status, "
+        "(SELECT COUNT(*) FROM complaint_users cu2 WHERE cu2.complaint_id = c.id) AS affected_users "
+        "FROM complaints c "
+        "JOIN complaint_users cu ON c.id = cu.complaint_id "
+        "WHERE cu.user_id = ? "
+        "GROUP BY c.id",
+        (user_id,)
+    ).fetchall()
+
+    return jsonify({'complaints': [dict(c) for c in complaints]})
 
 
 # ─── Main ───────────────────────────────────────────────────────────────────────

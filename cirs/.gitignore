@@ -1,0 +1,7 @@
+database.db
+flask_out.txt
+flask_pid.txt
+__pycache__/
+*.pyc
+.env
+venv/

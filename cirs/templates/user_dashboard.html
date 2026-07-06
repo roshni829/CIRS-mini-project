@@ -66,7 +66,7 @@
                             <div class="complaint-item">
                                 <div class="title-row">
                                     <h4>{{ complaint.title }}</h4>
-                                    <span class="badge
+                                    <span id="status-{{ complaint.id }}" class="badge
                                         {% if complaint.status == 'Pending' %}badge-warning
                                         {% elif complaint.status == 'In Progress' %}badge-info
                                         {% else %}badge-success{% endif %}">
@@ -76,7 +76,7 @@
                                 <div class="details">
                                     <span>{{ complaint.category }}</span>
                                     <span>{{ complaint.location }}</span>
-                                    <span>{{ complaint.affected_users }} affected</span>
+                                    <span id="count-{{ complaint.id }}">{{ complaint.affected_users }} affected</span>
                                     <span class="badge
                                         {% if complaint.priority == 'High' %}badge-danger
                                         {% elif complaint.priority == 'Medium' %}badge-warning
@@ -111,7 +111,7 @@
                             <div class="complaint-item">
                                 <div class="title-row">
                                     <h4>{{ complaint.title }}</h4>
-                                    <span class="badge
+                                    <span id="status-{{ complaint.id }}" class="badge
                                         {% if complaint.status == 'Pending' %}badge-warning
                                         {% elif complaint.status == 'In Progress' %}badge-info
                                         {% else %}badge-success{% endif %}">
@@ -121,7 +121,7 @@
                                 <div class="details">
                                     <span>{{ complaint.category }}</span>
                                     <span>{{ complaint.location }}</span>
-                                    <span>{{ complaint.affected_users }} affected</span>
+                                    <span id="count-{{ complaint.id }}">{{ complaint.affected_users }} affected</span>
                                     <span class="badge
                                         {% if complaint.priority == 'High' %}badge-danger
                                         {% elif complaint.priority == 'Medium' %}badge-warning
@@ -155,7 +155,7 @@
                             <div class="complaint-item">
                                 <div class="title-row">
                                     <h4>{{ complaint.title }}</h4>
-                                    <span class="badge
+                                    <span id="status-{{ complaint.id }}" class="badge
                                         {% if complaint.status == 'Pending' %}badge-warning
                                         {% elif complaint.status == 'In Progress' %}badge-info
                                         {% else %}badge-success{% endif %}">
@@ -165,7 +165,7 @@
                                 <div class="details">
                                     <span>{{ complaint.category }}</span>
                                     <span>{{ complaint.location }}</span>
-                                    <span>{{ complaint.affected_users }} affected</span>
+                                    <span id="count-{{ complaint.id }}">{{ complaint.affected_users }} affected</span>
                                     <span class="badge
                                         {% if complaint.priority == 'High' %}badge-danger
                                         {% elif complaint.priority == 'Medium' %}badge-warning
