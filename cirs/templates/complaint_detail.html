@@ -137,7 +137,7 @@
                                 <div>
                                     <div class="user-name">{{ user.name }}</div>
                                     <div class="user-meta">
-                                        {% if user.role == 'creator' %}Creator{% else %}Joined {{ user.joined_at[:16] }}{% endif %}
+                                        {% if user.role_in_complaint == 'creator' %}Creator{% else %}Joined {{ user.joined_at[:16] }}{% endif %}
                                     </div>
                                 </div>
                             </div>

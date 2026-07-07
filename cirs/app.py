@@ -103,7 +103,7 @@ def init_db():
             id            {id_type} PRIMARY KEY,
             complaint_id  INTEGER NOT NULL,
             user_id       INTEGER NOT NULL,
-            role          TEXT    NOT NULL DEFAULT 'joined',
+            role_in_complaint TEXT NOT NULL DEFAULT 'joined',
             joined_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (complaint_id) REFERENCES complaints(id),
             FOREIGN KEY (user_id) REFERENCES users(id),
@@ -320,6 +320,9 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def user_dashboard():
+    # Redirect admin to their dashboard
+    if session.get('role') == 'admin':
+        return redirect(url_for('admin_dashboard'))
     db = get_db()
     user_id = session['user_id']
 
@@ -327,7 +330,7 @@ def user_dashboard():
     my_complaints = db_execute(db,
         "SELECT c.*, cu.joined_at AS created_on, "
         "(SELECT COUNT(*) FROM complaint_users cu2 WHERE cu2.complaint_id = c.id) AS affected_users "
-        "FROM complaints c JOIN complaint_users cu ON c.id = cu.complaint_id AND cu.user_id = ? AND cu.role = 'creator' "
+        "FROM complaints c JOIN complaint_users cu ON c.id = cu.complaint_id AND cu.user_id = ? AND cu.role_in_complaint = 'creator' "
         "ORDER BY c.created_at DESC",
         (user_id,)
     ).fetchall()
@@ -337,7 +340,7 @@ def user_dashboard():
         "SELECT c.*, cu.joined_at AS joined_on, "
         "(SELECT COUNT(*) FROM complaint_users cu2 WHERE cu2.complaint_id = c.id) AS affected_users "
         "FROM complaints c JOIN complaint_users cu ON c.id = cu.complaint_id "
-        "WHERE cu.user_id = ? AND cu.role = 'joined' ORDER BY cu.joined_at DESC",
+        "WHERE cu.user_id = ? AND cu.role_in_complaint = 'joined' ORDER BY cu.joined_at DESC",
         (user_id,)
     ).fetchall()
 
@@ -358,6 +361,9 @@ def user_dashboard():
 @app.route('/submit', methods=['GET', 'POST'])
 @login_required
 def submit_complaint():
+    # Redirect admin to their dashboard
+    if session.get('role') == 'admin':
+        return redirect(url_for('admin_dashboard'))
     similar = None
 
     if request.method == 'POST':
@@ -388,9 +394,9 @@ def submit_complaint():
             (title, description, category, location, session['user_id'])
         )
         complaint_id = cursor.fetchone()[0]
-        # Add creator as an affected user with role='creator'
+        # Add creator as an affected user with role_in_complaint='creator'
         db_execute(db,
-            "INSERT INTO complaint_users (complaint_id, user_id, role) VALUES (?, ?, 'creator') "
+            "INSERT INTO complaint_users (complaint_id, user_id, role_in_complaint) VALUES (?, ?, 'creator') "
             "ON CONFLICT DO NOTHING",
             (complaint_id, session['user_id'])
         )
@@ -410,6 +416,9 @@ def submit_complaint():
 @app.route('/create-new', methods=['POST'])
 @login_required
 def create_new_complaint():
+    # Redirect admin to their dashboard
+    if session.get('role') == 'admin':
+        return redirect(url_for('admin_dashboard'))
     pending = session.pop('pending_complaint', None)
     if not pending:
         flash('No pending complaint found.', 'warning')
@@ -422,9 +431,9 @@ def create_new_complaint():
         (pending['title'], pending['description'], pending['category'], pending['location'], session['user_id'])
     )
     complaint_id = cursor.fetchone()[0]
-    # Add creator as an affected user with role='creator'
+    # Add creator as an affected user with role_in_complaint='creator'
     db_execute(db,
-        "INSERT INTO complaint_users (complaint_id, user_id, role) VALUES (?, ?, 'creator') "
+        "INSERT INTO complaint_users (complaint_id, user_id, role_in_complaint) VALUES (?, ?, 'creator') "
         "ON CONFLICT DO NOTHING",
         (complaint_id, session['user_id'])
     )
@@ -442,11 +451,14 @@ def create_new_complaint():
 @app.route('/join/<int:complaint_id>', methods=['POST'])
 @login_required
 def join_complaint(complaint_id):
+    # Redirect admin to their dashboard
+    if session.get('role') == 'admin':
+        return redirect(url_for('admin_dashboard'))
     db = get_db()
     user_id = session['user_id']
 
     cursor = db_execute(db,
-        "INSERT INTO complaint_users (complaint_id, user_id, role) VALUES (?, ?, 'joined') "
+        "INSERT INTO complaint_users (complaint_id, user_id, role_in_complaint) VALUES (?, ?, 'joined') "
         "ON CONFLICT DO NOTHING",
         (complaint_id, user_id)
     )
@@ -525,7 +537,7 @@ def complaint_detail(complaint_id):
         return redirect(url_for('login'))
 
     affected_users = db_execute(db,
-        "SELECT u.id, u.name, u.email, cu.joined_at, cu.role "
+        "SELECT u.id, u.name, u.email, cu.joined_at, cu.role_in_complaint "
         "FROM complaint_users cu JOIN users u ON cu.user_id = u.id "
         "WHERE cu.complaint_id = ? ORDER BY cu.joined_at",
         (complaint_id,)
