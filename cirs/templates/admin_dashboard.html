@@ -173,6 +173,11 @@
                                                 </select>
                                                 <button type="submit" class="btn btn-sm">Update</button>
                                             </form>
+                                            {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
+                                            <div style="font-size:11px;color:#166534;margin-top:4px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ complaint.resolution_notes }}">
+                                                {{ complaint.resolution_notes }}
+                                            </div>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                 {% endfor %}

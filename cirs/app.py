@@ -93,6 +93,7 @@ def init_db():
             location    TEXT    NOT NULL,
             status      TEXT    NOT NULL DEFAULT 'Pending',
             priority    TEXT    NOT NULL DEFAULT 'Low',
+            resolution_notes TEXT DEFAULT '',
             created_by  INTEGER NOT NULL,
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -130,6 +131,13 @@ def init_db():
     ]
     for sql in statements:
         db_execute(db, sql)
+
+    # Migration: add resolution_notes column if missing (supports both SQLite and PostgreSQL)
+    try:
+        db_execute(db, "ALTER TABLE complaints ADD COLUMN resolution_notes TEXT DEFAULT ''")
+    except Exception:
+        pass  # Column already exists
+
     db.commit()
 
 
@@ -557,7 +565,7 @@ def submit_complaint():
         db.commit()
         # Run dependency suggestion logic
         find_dependency_suggestions(complaint_id)
-        flash('Complaint submitted.', 'success')
+        flash('Issue submitted successfully.', 'success')
         return redirect(url_for('user_dashboard'))
 
     return render_template('submit_complaint.html')
@@ -596,7 +604,7 @@ def create_new_complaint():
     db.commit()
     # Run dependency suggestion logic
     find_dependency_suggestions(complaint_id)
-    flash('Complaint submitted.', 'success')
+    flash('Issue submitted successfully.', 'success')
     return redirect(url_for('user_dashboard'))
 
 
@@ -615,7 +623,7 @@ def join_complaint(complaint_id):
         (complaint_id, user_id)
     )
     if cursor.rowcount == 0:
-        flash('You have already joined this complaint.', 'info')
+        flash('You have already joined this issue.', 'info')
     else:
         db.commit()
         update_priority(complaint_id)
@@ -626,7 +634,7 @@ def join_complaint(complaint_id):
             (complaint_id, user_id, user_name + ' joined complaint')
         )
         db.commit()
-        flash('You joined this complaint.', 'success')
+        flash('You joined this issue.', 'success')
 
     return redirect(url_for('user_dashboard'))
 
@@ -697,7 +705,7 @@ def complaint_detail(complaint_id):
     ).fetchone()
 
     if not complaint:
-        flash('Complaint not found.', 'danger')
+        flash('Issue not found.', 'danger')
         return redirect(url_for('login'))
 
     affected_users = db_execute(db,
@@ -761,15 +769,27 @@ def update_status(complaint_id):
         return redirect(url_for('admin_dashboard'))
 
     db = get_db()
-    db_execute(db,
-        "UPDATE complaints SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (new_status, complaint_id)
-    )
+    resolution_notes = request.form.get('resolution_notes', '').strip()
+
+    if new_status == 'Resolved' and resolution_notes:
+        db_execute(db,
+            "UPDATE complaints SET status = ?, resolution_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_status, resolution_notes, complaint_id)
+        )
+    else:
+        db_execute(db,
+            "UPDATE complaints SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_status, complaint_id)
+        )
+
     # Add history entry
     admin_name = session.get('name', 'Admin')
+    action = admin_name + ' changed status to ' + new_status
+    if new_status == 'Resolved' and resolution_notes:
+        action = admin_name + ' resolved issue: ' + resolution_notes
     db_execute(db,
         "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
-        (complaint_id, session['user_id'], admin_name + ' changed status to ' + new_status)
+        (complaint_id, session['user_id'], action)
     )
 
     # Check if resolving a parent complaint with linked children
@@ -786,9 +806,9 @@ def update_status(complaint_id):
                 msgs.append(child['child_title'])
             db_execute(db,
                 "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
-                (complaint_id, session['user_id'], admin_name + ' resolved parent complaint. Linked complaints need review.')
+                (complaint_id, session['user_id'], 'Parent issue resolved. Linked issues need review.')
             )
-            flash('Linked complaint needs review: ' + ', '.join(msgs), 'warning')
+            flash('Linked issue needs review: ' + ', '.join(msgs), 'warning')
 
     db.commit()
     flash('Status updated.', 'success')

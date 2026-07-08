@@ -1301,6 +1301,18 @@ table .meta {
     font-size: 13px;
 }
 
+/* ─── Resolution Note ─────────────────────────────────────────────────────── */
+
+.resolution-note {
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: #dcfce7;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #166534;
+}
+
 /* ─── Count Label (badge-style count) ─────────────────────────────────────── */
 
 .count-label {

@@ -91,6 +91,12 @@
                                         {{ complaint.status }}
                                     </span>
                                 </div>
+                                {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
+                                <div style="grid-column:1/-1;">
+                                    <span class="label">Resolution</span>
+                                    <p style="margin:4px 0 0 0;font-size:14px;color:#166534;background:#dcfce7;padding:8px 12px;border-radius:6px;">{{ complaint.resolution_notes }}</p>
+                                </div>
+                                {% endif %}
                                 <div>
                                     <span class="label">Expected Resolution</span>
                                     <span class="value" style="font-size:14px;font-weight:600;color:#2563eb;">{{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
@@ -168,14 +174,17 @@
                             <hr class="section-divider">
                             <div class="detail-section">
                                 <span class="label">Update Status</span>
-                                <form method="POST" action="{{ url_for('update_status', complaint_id=complaint.id) }}" class="status-update-form">
+                                <form method="POST" action="{{ url_for('update_status', complaint_id=complaint.id) }}" class="status-update-form" style="flex-direction:column;align-items:stretch;">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <select class="form-control" name="status">
-                                        <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
-                                        <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
-                                        <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
-                                    </select>
-                                    <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                                    <div style="display:flex;gap:8px;">
+                                        <select class="form-control" name="status" style="width:auto;">
+                                            <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
+                                            <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                                            <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
+                                        </select>
+                                        <button type="submit" class="btn btn-primary btn-sm">Update</button>
+                                    </div>
+                                    <textarea class="form-control" name="resolution_notes" placeholder="Resolution notes (optional) — describe what was done..." style="min-height:60px;margin-top:8px;">{{ complaint.resolution_notes or '' }}</textarea>
                                 </form>
                             </div>
                             {% endif %}
@@ -214,7 +223,7 @@
                         <div class="card-body">
                             {% for entry in history %}
                             <div class="activity-item">
-                                <span class="time">{{ entry.created_at[:16] }}</span>
+                                <span class="time">{{ entry.created_at[11:16] }}</span>
                                 <span class="action">{{ entry.action }}</span>
                             </div>
                             {% endfor %}

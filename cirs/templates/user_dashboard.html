@@ -86,6 +86,9 @@
                                     <span>Expected Resolution: {{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
                                     <span>Created: {{ complaint.created_at[:16] }}</span>
                                 </div>
+                                {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
+                                <div class="resolution-note">Resolution: {{ complaint.resolution_notes }}</div>
+                                {% endif %}
                                 {% if confirmed_deps and complaint.id in confirmed_deps %}
                                 <div class="linked-info">
                                     {% for dep in confirmed_deps[complaint.id] %}
@@ -101,8 +104,8 @@
                         {% endfor %}
                     {% else %}
                         <div class="empty-state">
-                            <p>No complaints found.</p>
-                            <a href="{{ url_for('submit_complaint') }}" class="btn btn-primary btn-sm">Submit a complaint</a>
+                            <p>No issues found.</p>
+                            <a href="{{ url_for('submit_complaint') }}" class="btn btn-primary btn-sm">Submit an issue</a>
                         </div>
                     {% endif %}
                 </div>
@@ -140,6 +143,9 @@
                                     <span>Expected Resolution: {{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
                                     <span>Joined: {{ complaint.joined_on[:16] }}</span>
                                 </div>
+                                {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
+                                <div class="resolution-note">Resolution: {{ complaint.resolution_notes }}</div>
+                                {% endif %}
                                 {% if confirmed_deps and complaint.id in confirmed_deps %}
                                 <div class="linked-info">
                                     {% for dep in confirmed_deps[complaint.id] %}
@@ -155,7 +161,7 @@
                         {% endfor %}
                     {% else %}
                         <div class="empty-state">
-                            <p>No complaints found.</p>
+                            <p>No issues found.</p>
                         </div>
                     {% endif %}
                 </div>

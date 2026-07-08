@@ -99,12 +99,12 @@
     <div class="modal-overlay active" id="similarModal">
         <div class="modal-box">
             <div class="modal-header">
-                <span>A similar complaint already exists.</span>
+                <span>Possible Existing Issue</span>
                 <button class="close close-modal">&times;</button>
             </div>
             <div class="modal-body">
                 <p>
-                    Would you like to join the existing complaint instead of creating a new one?
+                    Would you like to join the existing issue instead of creating a new one?
                 </p>
 
                 {% for complaint in similar %}
@@ -130,7 +130,7 @@
                     <div class="sim-actions">
                         <form method="POST" action="{{ url_for('join_complaint', complaint_id=complaint.id) }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-success btn-sm">Join Complaint</button>
+                            <button type="submit" class="btn btn-success btn-sm">Join Issue</button>
                         </form>
                         <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details</a>
                     </div>
@@ -139,8 +139,7 @@
 
                 <div class="modal-create-new">
                     <form method="POST" action="{{ url_for('create_new_complaint') }}" onsubmit="return confirm('Create a new complaint anyway?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm" style="color:#6b7280;">Create New Complaint Anyway</button>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">                            <button type="submit" class="btn btn-sm" style="color:#6b7280;">Create New Issue Anyway</button>
                     </form>
                 </div>
             </div>
