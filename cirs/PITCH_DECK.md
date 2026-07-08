@@ -72,9 +72,10 @@ Existing: "Wi-Fi not working in Block A"
 | **Language** | Python 3.14+ | Industry-standard, taught in CS curricula |
 | **Framework** | Flask 3.0 | Lightweight, minimal dependencies |
 | **Frontend** | HTML5 + CSS3 + Vanilla JS | No build step, instant load |
-| **Database** | SQLite / PostgreSQL | Zero-config local; PostgreSQL via `DATABASE_URL` for production |
+| **Database** | PostgreSQL | Production-ready on Render, auto-scaled |
+| **PostgreSQL Adapter** | psycopg2-binary | Reliable Python-PostgreSQL connection |
 | **Auth** | Werkzeug + Flask-WTF | PBKDF2-SHA256 hashing, CSRF protection |
-| **Total dependencies** | **3 pip packages** | Flask, Flask-Session, Werkzeug |
+| **Total dependencies** | **4 pip packages** | Flask, Flask-Session, Werkzeug, psycopg2-binary |
 
 ---
 
@@ -118,7 +119,7 @@ Existing: "Wi-Fi not working in Block A"
 4. Login as Student One → See status updated in real-time
 ```
 
-**Demo accounts:** `student1@gmail.com` / `password123` | `admin@gmail.com` / `admin123`
+**Demo accounts:** `student1@cirs.com` / `student123` | `student2@cirs.com` / `student123` | `admin@cirs.com` / `admin123`
 
 ---
 
@@ -153,9 +154,9 @@ python app.py
 # → http://localhost:5000
 ```
 
-- **3 commands** to go from zero to running
-- **Zero infrastructure** — SQLite local, PostgreSQL via env var for production
-- **Zero cloud costs** — Runs on any machine with Python
+- **Set DATABASE_URL** env var → `python app.py`
+- **Deployed on Render** with free PostgreSQL tier
+- **Data persists** across deployments — no data loss on restart
 
 ---
 
@@ -170,4 +171,4 @@ python app.py
 
 ---
 
-*Built with Python • Flask • SQLite • Vanilla JS*
+*Built with Python • Flask • PostgreSQL • Vanilla JS*

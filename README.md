@@ -47,11 +47,10 @@ CIRS is a **single source of truth** for campus issue management that:
 
 ### Competitive Advantages
 
-- **Lightweight & self-contained** — Zero infrastructure costs. Just Python + SQLite. Runs on a Raspberry Pi.
-- **Zero external dependencies** — No cloud services, no API keys, no monthly subscriptions.
-- **Privacy-first** — All data stays on your own server. No third-party data sharing.
-- **CSRF-protected** — Built-in security against common web attacks.
-- **Dead simple deployment** — 3 commands to go from zero to running: `pip install -r requirements.txt` → `python app.py`
+- **PostgreSQL-powered** — Production-ready database with auto-scaling on Render
+- **Zero external API dependencies** — No API keys, no monthly subscriptions
+- **CSRF-protected** — Built-in security against common web attacks
+- **Dead simple deployment** — Set `DATABASE_URL`, `pip install -r requirements.txt`, `python app.py`
 
 ### Roadmap / Future Vision
 
@@ -115,7 +114,8 @@ The system uses **text similarity matching** to automatically detect duplicate c
 | Flask        | 3.0.0      | Web framework                  |
 | Werkzeug     | 3.0.1      | Password hashing & utilities   |
 | Flask-WTF    | (bundled)  | CSRF protection                |
-| SQLite3      | (built-in) | Database                       |
+| PostgreSQL   | —          | Database (via Render)          |
+| psycopg2     | 2.9.11     | PostgreSQL adapter             |
 | HTML5/CSS3   | —          | Frontend templates (Jinja2)    |
 | Vanilla JS   | —          | Client-side interactivity      |
 
@@ -125,6 +125,7 @@ The system uses **text similarity matching** to automatically detect duplicate c
 Flask==3.0.0
 Flask-Session==0.5.0
 Werkzeug==3.0.1
+psycopg2-binary==2.9.11
 ```
 
 ---
@@ -134,7 +135,6 @@ Werkzeug==3.0.1
 ```
 cirs/                           # Main application package
 ├── app.py                      # Flask application (routes, DB, auth, logic)
-├── database.db                 # SQLite database (auto-created)
 ├── requirements.txt            # Python dependencies
 ├── flask_out.txt               # Server log output
 ├── flask_pid.txt               # Server process ID
@@ -154,7 +154,7 @@ cirs/                           # Main application package
 
 ## Database Schema
 
-The application uses **SQLite** with 4 tables, all auto-created on first run.
+The application uses **PostgreSQL** with 5 tables (`users`, `complaints`, `complaint_users`, `complaint_history`, `complaint_dependencies`), all auto-created on first run via `init_db()`.
 
 ### `users`
 
@@ -283,15 +283,20 @@ pip install -r requirements.txt
 
 ## Running the Application
 
+Set your `DATABASE_URL` environment variable to your PostgreSQL connection string, then:
+
 ```bash
+set DATABASE_URL=postgresql://user:password@host:port/dbname
 python app.py
 ```
 
 The server will start on **http://localhost:5000** (available on all network interfaces).
 
 On first run, the application will:
-1. Auto-create the SQLite database (`database.db`) with all 4 tables.
-2. Seed 3 demo accounts (see below).
+1. Auto-create all 5 PostgreSQL tables (`CREATE TABLE IF NOT EXISTS`).
+2. Seed demo accounts and complaints (see below).
+
+> **Note:** This app requires PostgreSQL. Set the `DATABASE_URL` environment variable to your Render PostgreSQL connection string before starting.
 
 ### Stopping the server
 
@@ -305,9 +310,9 @@ The application seeds the following accounts automatically on first run.
 
 | Role  | Email               | Password     | Name          |
 |-------|---------------------|--------------|---------------|
-| User  | student1@gmail.com  | password123  | Student One   |
-| User  | student2@gmail.com  | password123  | Student Two   |
-| Admin | admin@gmail.com     | admin123     | Admin User    |
+| User  | student1@cirs.com   | student123   | Student One   |
+| User  | student2@cirs.com   | student123   | Student Two   |
+| Admin | admin@cirs.com      | admin123     | Admin User    |
 
 You can also **register new accounts** from the login page.
 
@@ -463,12 +468,18 @@ All POST routes are CSRF-protected. This applies to:
 
 ## Database
 
-- **Engine:** SQLite3 (serverless, file-based)
-- **File:** `cirs/database.db`
-- **Auto-creation:** Tables are created on application startup via `init_db()`.
+- **Engine:** PostgreSQL (hosted on Render)
+- **Connection:** Via `DATABASE_URL` environment variable
+- **Auto-creation:** Tables are created on application startup via `init_db()` (uses `CREATE TABLE IF NOT EXISTS`).
 - **Demo data:** Seeded on first run via `seed_demo_data()` (checks if any users exist first).
+- **Persistence:** Data survives restarts and redeploys — the PostgreSQL database is a separate service on Render.
 
-To reset the database: delete `database.db` and restart the application.
+To reset the database: connect to your PostgreSQL instance and run:
+```sql
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+```
+Then restart the server.
 
 ---
 

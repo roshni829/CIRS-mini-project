@@ -1,8 +1,10 @@
 import os
 import re
-import sqlite3
 from datetime import timedelta
 from functools import wraps
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from flask import Flask, render_template, request, redirect, url_for, session, g, flash, jsonify
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -12,61 +14,47 @@ app.secret_key = "cirs-mini-project-fixed-secret-key"
 app.permanent_session_lifetime = timedelta(hours=3)
 csrf = CSRFProtect(app)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "database.db")
 DATABASE_URL = os.environ.get('DATABASE_URL')
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL environment variable is required. "
+        "Set it to your PostgreSQL connection string, e.g.: "
+        "postgresql://user:password@host:port/dbname"
+    )
 
 
-# ─── Database layer (supports PostgreSQL + SQLite fallback) ─────────────────────
+# ─── Database layer (PostgreSQL only) ──────────────────────────────────────────
 
-if DATABASE_URL:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
+def get_db():
+    if 'db' not in g:
+        g.db = psycopg2.connect(DATABASE_URL)
+    return g.db
 
-    def get_db():
-        if 'db' not in g:
-            g.db = psycopg2.connect(DATABASE_URL)
-        return g.db
 
-    def close_db(exception=None):
-        db = g.pop('db', None)
-        if db is not None:
-            db.close()
+def close_db(exception=None):
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
 
-    def db_execute(db, sql, params=None):
-        """Execute a query, converting SQLite dialect to PostgreSQL."""
-        pg_sql = sql.replace('?', '%s')
-        pg_sql = pg_sql.replace('INSERT OR IGNORE INTO', 'INSERT INTO')
 
-        cur = db.cursor(cursor_factory=RealDictCursor)
-        if params:
-            cur.execute(pg_sql, params)
-        else:
-            cur.execute(pg_sql)
-        # Map .lastrowid for code that uses RETURNING id
-        if pg_sql.strip().upper().startswith("INSERT") and "RETURNING" in pg_sql.upper():
-            row = cur.fetchone()
-            cur._lastrowid = row['id'] if row else None
-        else:
-            cur._lastrowid = None
-        return cur
+def db_execute(db, sql, params=None):
+    """Execute a query, converting ? placeholders to %s for psycopg2."""
+    pg_sql = sql.replace('?', '%s')
+    pg_sql = pg_sql.replace('INSERT OR IGNORE INTO', 'INSERT INTO')
 
-else:
-    def get_db():
-        if 'db' not in g:
-            g.db = sqlite3.connect(DB_PATH)
-            g.db.row_factory = sqlite3.Row
-        return g.db
+    cur = db.cursor(cursor_factory=RealDictCursor)
+    if params:
+        cur.execute(pg_sql, params)
+    else:
+        cur.execute(pg_sql)
 
-    def close_db(exception=None):
-        db = g.pop('db', None)
-        if db is not None:
-            db.close()
-
-    def db_execute(db, sql, params=None):
-        if params:
-            return db.execute(sql, params)
-        return db.execute(sql)
+    # Map .lastrowid for code that uses RETURNING id
+    if pg_sql.strip().upper().startswith("INSERT") and "RETURNING" in pg_sql.upper():
+        row = cur.fetchone()
+        cur._lastrowid = row['id'] if row else None
+    else:
+        cur._lastrowid = None
+    return cur
 
 
 app.teardown_appcontext(close_db)
@@ -74,19 +62,17 @@ app.teardown_appcontext(close_db)
 
 def init_db():
     db = get_db()
-    # Use SERIAL for PostgreSQL, INTEGER for SQLite fallback
-    id_type = "SERIAL" if DATABASE_URL else "INTEGER"
     statements = [
-        f"""CREATE TABLE IF NOT EXISTS users (
-            id          {id_type} PRIMARY KEY,
+        """CREATE TABLE IF NOT EXISTS users (
+            id          SERIAL PRIMARY KEY,
             name        TEXT    NOT NULL,
             email       TEXT    UNIQUE NOT NULL,
             password    TEXT    NOT NULL,
             role        TEXT    NOT NULL DEFAULT 'user',
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
-        f"""CREATE TABLE IF NOT EXISTS complaints (
-            id          {id_type} PRIMARY KEY,
+        """CREATE TABLE IF NOT EXISTS complaints (
+            id          SERIAL PRIMARY KEY,
             title       TEXT    NOT NULL,
             description TEXT    NOT NULL,
             category    TEXT    NOT NULL,
@@ -99,8 +85,8 @@ def init_db():
             updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (created_by) REFERENCES users(id)
         )""",
-        f"""CREATE TABLE IF NOT EXISTS complaint_users (
-            id            {id_type} PRIMARY KEY,
+        """CREATE TABLE IF NOT EXISTS complaint_users (
+            id            SERIAL PRIMARY KEY,
             complaint_id  INTEGER NOT NULL,
             user_id       INTEGER NOT NULL,
             role_in_complaint TEXT NOT NULL DEFAULT 'joined',
@@ -109,8 +95,8 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id),
             UNIQUE(complaint_id, user_id)
         )""",
-        f"""CREATE TABLE IF NOT EXISTS complaint_history (
-            id            {id_type} PRIMARY KEY,
+        """CREATE TABLE IF NOT EXISTS complaint_history (
+            id            SERIAL PRIMARY KEY,
             complaint_id  INTEGER NOT NULL,
             user_id       INTEGER NOT NULL,
             action        TEXT    NOT NULL,
@@ -118,8 +104,8 @@ def init_db():
             FOREIGN KEY (complaint_id) REFERENCES complaints(id),
             FOREIGN KEY (user_id) REFERENCES users(id)
         )""",
-        f"""CREATE TABLE IF NOT EXISTS complaint_dependencies (
-            id                      {id_type} PRIMARY KEY,
+        """CREATE TABLE IF NOT EXISTS complaint_dependencies (
+            id                      SERIAL PRIMARY KEY,
             complaint_id            INTEGER NOT NULL,
             depends_on_complaint_id INTEGER NOT NULL,
             reason                  TEXT    NOT NULL,
@@ -133,17 +119,17 @@ def init_db():
     for sql in statements:
         db_execute(db, sql)
 
-    # Migration: add resolution_notes column if missing (supports both SQLite and PostgreSQL)
+    # Migration: add resolution_notes column if missing
     try:
         db_execute(db, "ALTER TABLE complaints ADD COLUMN resolution_notes TEXT DEFAULT ''")
     except Exception:
-        pass  # Column already exists
+        pass
 
     # Migration: add confidence column to complaint_dependencies
     try:
         db_execute(db, "ALTER TABLE complaint_dependencies ADD COLUMN confidence TEXT DEFAULT 'Medium'")
     except Exception:
-        pass  # Column already exists
+        pass
 
     db.commit()
 
@@ -156,18 +142,141 @@ def seed_demo_data():
     if existing > 0:
         return
 
+    def _insert(sql, params):
+        """Insert a row and return the generated ID."""
+        cur = db_execute(db, sql + " RETURNING id", params)
+        return getattr(cur, '_lastrowid', None) or cur.fetchone()[0]
+
+    # ── Create 4 users ────────────────────────────────────────────────────
+    s1 = _insert("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
+                  ('Student One', 'student1@cirs.com', generate_password_hash('student123'), 'user'))
+    s2 = _insert("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
+                  ('Student Two', 'student2@cirs.com', generate_password_hash('student123'), 'user'))
+    s3 = _insert("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
+                  ('Student Three', 'student3@cirs.com', generate_password_hash('student123'), 'user'))
+    a1 = _insert("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
+                  ('Admin User', 'admin@cirs.com', generate_password_hash('admin123'), 'admin'))
+    db.commit()
+
+    # ── Create 6 complaints ───────────────────────────────────────────────
+
+    def _make_complaint(title, desc, cat, loc, status, priority, creator_id, creator_name):
+        cid = _insert(
+            "INSERT INTO complaints (title, description, category, location, status, priority, created_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (title, desc, cat, loc, status, priority, creator_id))
+        db_execute(db,
+            "INSERT INTO complaint_users (complaint_id, user_id, role_in_complaint) VALUES (?, ?, 'creator')",
+            (cid, creator_id))
+        db_execute(db,
+            "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+            (cid, creator_id, f'{creator_name} created complaint'))
+        return cid
+
+    def _join(complaint_id, user_id, user_name):
+        db_execute(db,
+            "INSERT INTO complaint_users (complaint_id, user_id, role_in_complaint) VALUES (?, ?, 'joined') "
+            "ON CONFLICT DO NOTHING",
+            (complaint_id, user_id))
+        db_execute(db,
+            "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+            (complaint_id, user_id, f'{user_name} joined complaint'))
+
+    def _set_status(complaint_id, new_status, admin_name, notes=''):
+        if notes:
+            db_execute(db,
+                "UPDATE complaints SET status = ?, resolution_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (new_status, notes, complaint_id))
+        else:
+            db_execute(db,
+                "UPDATE complaints SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (new_status, complaint_id))
+        action = f'{admin_name} changed status to {new_status}'
+        if new_status == 'Resolved' and notes:
+            action = f'{admin_name} resolved issue: {notes}'
+        db_execute(db,
+            "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+            (complaint_id, a1, action))
+
+    def _set_priority(cid, affected_count):
+        pri = 'High' if affected_count >= 6 else 'Medium' if affected_count >= 3 else 'Low'
+        db_execute(db,
+            "UPDATE complaints SET priority = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (pri, cid))
+
+    # ── C1: Wi-Fi not working (Student One) ────────────────────────────────
+    c1 = _make_complaint(
+        'Wi-Fi not working in Hostel Block A',
+        'The Wi-Fi network has been down since yesterday. Students are unable to access the internet for online classes.',
+        'Wi-Fi', 'Hostel Block A', 'In Progress', 'Medium', s1, 'Student One')
+    _join(c1, s2, 'Student Two')
+    _join(c1, s3, 'Student Three')
+    _set_status(c1, 'In Progress', 'Admin User')
+    _set_priority(c1, 3)
+    db.commit()
+
+    # ── C2: Electricity issue (Student One) ────────────────────────────────
+    c2 = _make_complaint(
+        'Electricity issue in Hostel Block A',
+        'Power supply is unavailable in Hostel Block A. Lights and fans are not working.',
+        'Electricity', 'Hostel Block A', 'Pending', 'Low', s1, 'Student One')
+    db.commit()
+
+    # ── C3: Water motor not working (Student Two) ──────────────────────────
+    c3 = _make_complaint(
+        'Water motor not working',
+        'Motor is not running and water is not coming to the overhead tank.',
+        'Water', 'Hostel Block A', 'Pending', 'Low', s2, 'Student Two')
+    db.commit()
+
+    # ── C4: Leaking tap (Student Three) ────────────────────────────────────
+    c4 = _make_complaint(
+        'Leaking tap in Boys Washroom',
+        'The tap in the ground floor boys washroom is continuously leaking. Water is being wasted.',
+        'Water', 'Academic Block', 'In Progress', 'Low', s3, 'Student Three')
+    _join(c4, s1, 'Student One')
+    _set_status(c4, 'In Progress', 'Admin User')
+    _set_priority(c4, 2)
+    db.commit()
+
+    # ── C5: Projector bulb fuse (Student Two) — RESOLVED ───────────────────
+    c5 = _make_complaint(
+        'Projector bulb fuse in Room 201',
+        'The projector bulb in classroom 201 has fused. Unable to conduct presentations.',
+        'Classroom', 'Room 201', 'Resolved', 'Low', s2, 'Student Two')
+    _set_status(c5, 'Resolved', 'Admin User', 'Replaced the projector bulb. Working normally now.')
+    db.commit()
+
+    # ── C6: Slow internet in Computer Lab (Student Three) ──────────────────
+    c6 = _make_complaint(
+        'Slow internet in Computer Lab',
+        'The internet speed in the computer lab is extremely slow. Unable to load websites and access lab resources.',
+        'Wi-Fi', 'Computer Lab', 'Pending', 'Medium', s3, 'Student Three')
+    _join(c6, s1, 'Student One')
+    _join(c6, s2, 'Student Two')
+    _join(c6, a1, 'Admin User')  # Admin also joined to show they're affected
+    _set_priority(c6, 4)
+    db.commit()
+
+    # ── Dependencies ───────────────────────────────────────────────────────
+
+    # Dep 1: C3 (Water motor) → C2 (Electricity) — SUGGESTED
+    # Water motor depends on electricity: motor keyword, same location (Hostel Block A)
     db_execute(db,
-        "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-        ('Student One', 'student1@gmail.com', generate_password_hash('password123'), 'user')
-    )
+        "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status, confidence) "
+        "VALUES (?, ?, ?, 'suggested', ?)",
+        (c3, c2, 'This issue may require electricity. Equipment needs power supply.', 'High'))
+
+    # Dep 2: C1 (Wi-Fi not working) → C2 (Electricity) — CONFIRMED
+    # Wi-Fi router needs power
     db_execute(db,
-        "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-        ('Student Two', 'student2@gmail.com', generate_password_hash('password123'), 'user')
-    )
+        "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status, confidence) "
+        "VALUES (?, ?, ?, 'confirmed', ?)",
+        (c1, c2, 'Router or network equipment may require electricity.', 'High'))
     db_execute(db,
-        "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-        ('Admin User', 'admin@gmail.com', generate_password_hash('admin123'), 'admin')
-    )
+        "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+        (c1, a1, 'Admin User confirmed dependency with Electricity issue in Hostel Block A'))
+
     db.commit()
 
 
@@ -400,23 +509,10 @@ def find_dependency_suggestions(complaint_id):
 # ─── Jinja2 filters ──────────────────────────────────────────────────────────────
 
 def format_datetime(value, fmt='%d %b %Y, %I:%M %p'):
-    """Format a datetime value for display. Handles both datetime objects (PostgreSQL)
-    and ISO-format strings (SQLite)."""
+    """Format a datetime value for display."""
     if value is None:
         return '-'
-    if hasattr(value, 'strftime'):
-        return value.strftime(fmt)
-    # SQLite returns TIMESTAMP as a string
-    if isinstance(value, str) and len(value) >= 16:
-        from datetime import datetime as dt_parser
-        try:
-            dt = dt_parser.strptime(value[:19], '%Y-%m-%d %H:%M:%S')
-            return dt.strftime(fmt)
-        except Exception:
-            pass
-        # Fallback: just slice the string
-        return value[:16]
-    return str(value)[:16] if value else '-'
+    return value.strftime(fmt)
 
 
 def format_time(value, fmt='%I:%M %p'):

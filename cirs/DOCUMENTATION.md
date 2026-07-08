@@ -103,7 +103,8 @@ CIRS is a **single source of truth** for campus issue management that:
 | **Web Framework** | Flask | 3.0.0 | HTTP server, routing, session management |
 | **Templating** | Jinja2 | (bundled with Flask) | Server-side HTML rendering |
 | **Frontend** | HTML5 + CSS3 + Vanilla JS | — | UI rendering & interactivity |
-| **Database** | SQLite3 | (built-in) | Persistent data storage |
+| **Database** | PostgreSQL | (via Render) | Persistent data storage |
+| **PostgreSQL Adapter** | psycopg2 | 2.9.11 | Python-PostgreSQL connection |
 | **Auth** | Flask-WTF / Werkzeug | — | CSRF protection, password hashing |
 | **Password Security** | Werkzeug | 3.0.1 | PBKDF2-SHA256 hashing |
 
@@ -111,11 +112,11 @@ CIRS is a **single source of truth** for campus issue management that:
 
 | Consideration | Choice | Rationale |
 |---------------|--------|-----------|
-| **Zero infrastructure cost** | SQLite (no server needed) | Runs on any machine with Python — no database installation |
-| **Minimal dependencies** | Flask (microframework) | Only 3 pip packages — lightweight and fast |
+| **Production-ready** | PostgreSQL | Robust, scalable, industry-standard database |
+| **Deployed on Render** | PostgreSQL | Free hosted PostgreSQL with automatic backups |
+| **Minimal dependencies** | Flask (microframework) | Only a few pip packages — lightweight and fast |
 | **No build step** | Vanilla JS (no React/Angular) | Instant page loads, no compilation needed |
 | **Educational relevance** | Python + Flask | Industry-standard web framework taught in most CS curricula |
-| **Portable** | File-based database | Just copy the folder — everything travels together |
 
 ---
 
@@ -137,19 +138,22 @@ CIRS is a **single source of truth** for campus issue management that:
 │  └──────────┘  └──────────┘  └──────────┘  └──────────────┘ │
 │                                                              │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │              Database Abstraction Layer               │   │
-│  │     (SQLite fallback / PostgreSQL on Render)          │   │
+│  │                  PostgreSQL Database                    │   │
+│  │              (via psycopg2 + RealDictCursor)            │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────┬───────────────────────────────────┘
                           │ SQL Queries
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                     SQLite Database                          │
+│                   PostgreSQL Database                        │
 │                                                              │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────┐  ┌─────────┐ │
 │  │  users   │  │complaints│  │complaint_users│  │complaint│ │
 │  │          │  │          │  │               │  │_history │ │
 │  └──────────┘  └──────────┘  └──────────────┘  └─────────┘ │
+│  ┌──────────────────────────────┐                            │
+│  │  complaint_dependencies      │                            │
+│  └──────────────────────────────┘                            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -1027,10 +1031,12 @@ Open your browser and navigate to:
 
 ### Database Reset (if needed)
 
-To reset all data:
-1. Stop the server (Ctrl+C)
-2. Delete the database: `del database.db` (Windows) or `rm database.db` (Mac/Linux)
-3. Restart the server: `python app.py`
+To reset all data, you can drop and recreate the tables by connecting to your PostgreSQL instance:
+```sql
+DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+```
+Then restart the server — `init_db()` will recreate the tables and `seed_demo_data()` will seed fresh demo data.
 
 ---
 
@@ -1040,9 +1046,9 @@ The application seeds 3 accounts automatically on first run.
 
 | Name | Email | Password | Role |
 |------|-------|----------|------|
-| Student One | student1@gmail.com | password123 | Student (user) |
-| Student Two | student2@gmail.com | password123 | Student (user) |
-| Admin User | admin@gmail.com | admin123 | Admin |
+| Student One | student1@cirs.com | student123 | Student (user) |
+| Student Two | student2@cirs.com | student123 | Student (user) |
+| Admin User | admin@cirs.com | admin123 | Admin |
 
 ### Suggested Demo Walkthrough
 
@@ -1227,12 +1233,11 @@ cirs/
 │   ├── API routes (live polling)
 │   └── Main entry point
 │
-├── database.db                # SQLite database (auto-created)
-│
 ├── requirements.txt           # Python dependencies
 │   ├── Flask==3.0.0
 │   ├── Flask-Session==0.5.0
-│   └── Werkzeug==3.0.1
+│   ├── Werkzeug==3.0.1
+│   └── psycopg2-binary==2.9.11
 │
 ├── static/
 │   ├── style.css              # Complete application styles (~800 lines)
