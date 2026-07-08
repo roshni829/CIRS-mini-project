@@ -109,8 +109,8 @@
                             </div>
 
                             <div class="timestamps">
-                                <span>Created: {{ complaint.created_at }}</span>
-                                <span>Updated: {{ complaint.updated_at }}</span>
+                                <span>Created: {{ complaint.created_at.strftime('%d %b %Y, %I:%M %p') if complaint.created_at else '-' }}</span>
+                                <span>Updated: {{ complaint.updated_at.strftime('%d %b %Y, %I:%M %p') if complaint.updated_at else '-' }}</span>
                             </div>
 
                             <!-- Dependency Warnings (for admin, when resolving) -->
@@ -207,7 +207,7 @@
                                 <div>
                                     <div class="user-name">{{ user.name }}</div>
                                     <div class="user-meta">
-                                        {% if user.role_in_complaint == 'creator' %}Creator{% else %}Joined {{ user.joined_at[:16] }}{% endif %}
+                                        {% if user.role_in_complaint == 'creator' %}Creator{% else %}Joined {{ user.joined_at.strftime('%d %b %Y, %I:%M %p') if user.joined_at else '-' }}{% endif %}
                                     </div>
                                 </div>
                             </div>
@@ -223,7 +223,7 @@
                         <div class="card-body">
                             {% for entry in history %}
                             <div class="activity-item">
-                                <span class="time">{{ entry.created_at[11:16] }}</span>
+                                <span class="time">{{ entry.created_at.strftime('%I:%M %p') if entry.created_at else '-' }}</span>
                                 <span class="action">{{ entry.action }}</span>
                             </div>
                             {% endfor %}

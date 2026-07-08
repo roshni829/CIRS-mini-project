@@ -84,7 +84,7 @@
                                         {{ complaint.priority }}
                                     </span>
                                     <span>Expected Resolution: {{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
-                                    <span>Created: {{ complaint.created_at[:16] }}</span>
+                                    <span>Created: {{ complaint.created_at.strftime('%d %b %Y, %I:%M %p') if complaint.created_at else '-' }}</span>
                                 </div>
                                 {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
                                 <div class="resolution-note">Resolution: {{ complaint.resolution_notes }}</div>
@@ -141,7 +141,7 @@
                                         {{ complaint.priority }}
                                     </span>
                                     <span>Expected Resolution: {{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
-                                    <span>Joined: {{ complaint.joined_on[:16] }}</span>
+                                    <span>Joined: {{ complaint.joined_on.strftime('%d %b %Y, %I:%M %p') if complaint.joined_on else '-' }}</span>
                                 </div>
                                 {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
                                 <div class="resolution-note">Resolution: {{ complaint.resolution_notes }}</div>
