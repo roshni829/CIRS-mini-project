@@ -397,6 +397,36 @@ def find_dependency_suggestions(complaint_id):
         db.commit()
 
 
+# ─── Jinja2 filters ──────────────────────────────────────────────────────────────
+
+def format_datetime(value, fmt='%d %b %Y, %I:%M %p'):
+    """Format a datetime value for display. Handles both datetime objects (PostgreSQL)
+    and ISO-format strings (SQLite)."""
+    if value is None:
+        return '-'
+    if hasattr(value, 'strftime'):
+        return value.strftime(fmt)
+    # SQLite returns TIMESTAMP as a string
+    if isinstance(value, str) and len(value) >= 16:
+        from datetime import datetime as dt_parser
+        try:
+            dt = dt_parser.strptime(value[:19], '%Y-%m-%d %H:%M:%S')
+            return dt.strftime(fmt)
+        except Exception:
+            pass
+        # Fallback: just slice the string
+        return value[:16]
+    return str(value)[:16] if value else '-'
+
+
+def format_time(value, fmt='%I:%M %p'):
+    """Format a time-only datetime value. Handles both datetime objects and strings."""
+    return format_datetime(value, fmt)
+
+
+app.jinja_env.filters['format_datetime'] = format_datetime
+app.jinja_env.filters['format_time'] = format_time
+
 # ─── Make helpers available in templates ────────────────────────────────────────
 
 app.jinja_env.globals.update(get_expected_resolution_time=get_expected_resolution_time)
