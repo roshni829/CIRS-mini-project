@@ -26,7 +26,6 @@ if DATABASE_URL:
     def get_db():
         if 'db' not in g:
             g.db = psycopg2.connect(DATABASE_URL)
-            g.db._is_postgres = True
         return g.db
 
     def close_db(exception=None):
