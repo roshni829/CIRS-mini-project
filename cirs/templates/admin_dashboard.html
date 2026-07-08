@@ -50,6 +50,38 @@
                 {% endif %}
             {% endwith %}
 
+            <!-- Suggested Linked Issues -->
+            {% if suggested_deps %}
+            <div class="card">
+                <div class="card-header">
+                    Suggested Linked Issues
+                    <span class="count-label">{{ suggested_deps|length }} pending</span>
+                </div>
+                <div class="card-body">
+                    {% for dep in suggested_deps %}
+                    <div class="dependency-item">
+                        <div class="dep-relation">
+                            <span class="dep-child">{{ dep.complaint_title }}</span>
+                            <span class="dep-arrow">may depend on</span>
+                            <span class="dep-parent">{{ dep.parent_title }}</span>
+                        </div>
+                        <div class="dep-reason">Reason: {{ dep.reason }}</div>
+                        <div class="dep-actions">
+                            <form method="POST" action="{{ url_for('confirm_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-success btn-sm">Confirm</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('ignore_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm">Ignore</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Filter bar -->
             <div class="filter-bar">
                 <form method="GET" action="{{ url_for('admin_dashboard') }}" class="filter-form">
@@ -94,6 +126,7 @@
                                 <th>Location</th>
                                 <th>Affected</th>
                                 <th>Priority</th>
+                                <th>Expected Resolution</th>
                                 <th>Status</th>
                                 <th></th>
                             </tr>
@@ -120,6 +153,9 @@
                                             </span>
                                         </td>
                                         <td>
+                                            <span class="resolution-time">{{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
+                                        </td>
+                                        <td>
                                             <span id="status-{{ complaint.id }}" class="badge
                                                 {% if complaint.status == 'Pending' %}badge-warning
                                                 {% elif complaint.status == 'In Progress' %}badge-info
@@ -142,7 +178,7 @@
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="7">
+                                    <td colspan="8">
                                         <div class="empty-state">
                                             <p>No complaints found.</p>
                                         </div>

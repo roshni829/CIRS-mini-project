@@ -83,8 +83,17 @@
                                         {% else %}badge-secondary{% endif %}">
                                         {{ complaint.priority }}
                                     </span>
+                                    <span>Expected Resolution: {{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
                                     <span>Created: {{ complaint.created_at[:16] }}</span>
                                 </div>
+                                {% if confirmed_deps and complaint.id in confirmed_deps %}
+                                <div class="linked-info">
+                                    {% for dep in confirmed_deps[complaint.id] %}
+                                    <span class="linked-issue">Linked issue: {{ dep.parent_title }}</span>
+                                    {% endfor %}
+                                    <span class="linked-note">Resolution may depend on this linked issue.</span>
+                                </div>
+                                {% endif %}
                                 <div class="actions">
                                     <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View</a>
                                 </div>
@@ -128,8 +137,17 @@
                                         {% else %}badge-secondary{% endif %}">
                                         {{ complaint.priority }}
                                     </span>
+                                    <span>Expected Resolution: {{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
                                     <span>Joined: {{ complaint.joined_on[:16] }}</span>
                                 </div>
+                                {% if confirmed_deps and complaint.id in confirmed_deps %}
+                                <div class="linked-info">
+                                    {% for dep in confirmed_deps[complaint.id] %}
+                                    <span class="linked-issue">Linked issue: {{ dep.parent_title }}</span>
+                                    {% endfor %}
+                                    <span class="linked-note">Resolution may depend on this linked issue.</span>
+                                </div>
+                                {% endif %}
                                 <div class="actions">
                                     <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View</a>
                                 </div>
@@ -172,6 +190,7 @@
                                         {% else %}badge-secondary{% endif %}">
                                         {{ complaint.priority }}
                                     </span>
+                                    <span>Expected Resolution: {{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
                                     <span>by {{ complaint.creator_name }}</span>
                                 </div>
                                 <div class="actions">

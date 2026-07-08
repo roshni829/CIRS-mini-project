@@ -91,6 +91,10 @@
                                         {{ complaint.status }}
                                     </span>
                                 </div>
+                                <div>
+                                    <span class="label">Expected Resolution</span>
+                                    <span class="value" style="font-size:14px;font-weight:600;color:#2563eb;">{{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
+                                </div>
                             </div>
 
                             <div class="detail-section">
@@ -102,6 +106,63 @@
                                 <span>Created: {{ complaint.created_at }}</span>
                                 <span>Updated: {{ complaint.updated_at }}</span>
                             </div>
+
+                            <!-- Dependency Warnings (for admin, when resolving) -->
+                            {% if session['role'] == 'admin' and has_linked_children > 0 %}
+                            <hr class="section-divider">
+                            <div class="detail-section">
+                                <span class="label" style="color:#dc2626;">Linked Complaints Notice</span>
+                                <p style="font-size:13px;color:#991b1b;margin:4px 0 0 0;">
+                                    This complaint has linked complaints. Please review them before resolving.
+                                </p>
+                            </div>
+                            {% endif %}
+
+                            <!-- Suggested Dependencies (for admin only) -->
+                            {% if session['role'] == 'admin' and suggested_deps %}
+                            <hr class="section-divider">
+                            <div class="detail-section">
+                                <span class="label">Suggested Linked Issues</span>
+                                {% for dep in suggested_deps %}
+                                <div class="dependency-item" style="margin-top:10px;">
+                                    <div class="dep-relation">
+                                        <span class="dep-child">{{ dep.complaint_title }}</span>
+                                        <span class="dep-arrow">may depend on</span>
+                                        <span class="dep-parent">{{ dep.parent_title }}</span>
+                                    </div>
+                                    <div class="dep-reason">Reason: {{ dep.reason }}</div>
+                                    <div class="dep-actions">
+                                        <form method="POST" action="{{ url_for('confirm_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-success btn-sm">Confirm</button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('ignore_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm">Ignore</button>
+                                        </form>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
+                            <!-- Confirmed Dependencies (for all users) -->
+                            {% if confirmed_deps %}
+                            <hr class="section-divider">
+                            <div class="detail-section">
+                                <span class="label">Linked Issues</span>
+                                {% for dep in confirmed_deps %}
+                                <div class="dependency-item" style="margin-top:10px;">
+                                    <div class="dep-relation">
+                                        <span class="dep-child">{{ dep.complaint_title }}</span>
+                                        <span class="dep-arrow">depends on</span>
+                                        <span class="dep-parent">{{ dep.parent_title }}</span>
+                                    </div>
+                                    <div class="dep-reason" style="color:#6b7280;font-size:12px;">Resolution may depend on this linked issue.</div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
 
                             {% if session['role'] == 'admin' %}
                             <hr class="section-divider">

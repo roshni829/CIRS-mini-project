@@ -118,6 +118,16 @@ def init_db():
             FOREIGN KEY (complaint_id) REFERENCES complaints(id),
             FOREIGN KEY (user_id) REFERENCES users(id)
         )""",
+        f"""CREATE TABLE IF NOT EXISTS complaint_dependencies (
+            id                      {id_type} PRIMARY KEY,
+            complaint_id            INTEGER NOT NULL,
+            depends_on_complaint_id INTEGER NOT NULL,
+            reason                  TEXT    NOT NULL,
+            status                  TEXT    NOT NULL DEFAULT 'suggested',
+            created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (complaint_id) REFERENCES complaints(id),
+            FOREIGN KEY (depends_on_complaint_id) REFERENCES complaints(id)
+        )""",
     ]
     for sql in statements:
         db_execute(db, sql)
@@ -210,6 +220,20 @@ def calculate_priority(affected_count):
         return 'Low'
 
 
+def get_expected_resolution_time(category, priority):
+    """Return expected resolution time text based on category and priority."""
+    mapping = {
+        'Electricity': {'High': '1 hour', 'Medium': '3 hours', 'Low': '6 hours'},
+        'Water': {'High': '2 hours', 'Medium': '4 hours', 'Low': '8 hours'},
+        'Wi-Fi': {'High': '3 hours', 'Medium': '6 hours', 'Low': '12 hours'},
+        'Cleanliness': {'High': '6 hours', 'Medium': '12 hours', 'Low': '24 hours'},
+        'Classroom': {'High': '2 hours', 'Medium': '6 hours', 'Low': '12 hours'},
+        'Hostel': {'High': '4 hours', 'Medium': '8 hours', 'Low': '24 hours'},
+        'Other': {'High': '6 hours', 'Medium': '12 hours', 'Low': '24 hours'},
+    }
+    return mapping.get(category, {}).get(priority, 'N/A')
+
+
 def update_priority(complaint_id):
     db = get_db()
     count = db_execute(db,
@@ -222,6 +246,104 @@ def update_priority(complaint_id):
         (new_priority, complaint_id)
     )
     db.commit()
+
+
+# ─── Dependency Suggestion Logic ───────────────────────────────────────────────
+
+def find_dependency_suggestions(complaint_id):
+    """After a complaint is created, find possible dependencies and insert suggestions."""
+    db = get_db()
+
+    complaint = db_execute(db, "SELECT * FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
+    if not complaint:
+        return
+
+    new_text = (complaint['title'] + ' ' + complaint['description']).lower()
+    new_location = complaint['location'].lower()
+    new_location_first = new_location.split()[0] if new_location else ''
+
+    # Find unresolved complaints in similar location
+    existing = db_execute(db,
+        "SELECT * FROM complaints WHERE id != ? AND status != 'Resolved'",
+        (complaint_id,)
+    ).fetchall()
+
+    # Check already linked
+    linked_rows = db_execute(db,
+        "SELECT depends_on_complaint_id FROM complaint_dependencies WHERE complaint_id = ?",
+        (complaint_id,)
+    ).fetchall()
+    already_linked = {row['depends_on_complaint_id'] for row in linked_rows}
+
+    suggestions = []
+
+    for existing_c in existing:
+        if existing_c['id'] in already_linked:
+            continue
+
+        # Check similar location (same first word of location)
+        existing_loc = existing_c['location'].lower()
+        existing_loc_first = existing_loc.split()[0] if existing_loc else ''
+        if new_location_first != existing_loc_first:
+            continue
+
+        reason = None
+        existing_text = (existing_c['title'] + ' ' + existing_c['description']).lower()
+        category = existing_c['category'].lower()
+
+        # Rule 1: Electricity may affect motor/pump/water/wifi/router/internet/projector/lab/computer
+        if category == 'electricity':
+            keywords = ['motor', 'pump', 'water', 'wifi', 'router', 'internet', 'projector', 'lab', 'computer']
+            if any(kw in new_text for kw in keywords):
+                if any(kw in new_text for kw in ['motor', 'pump', 'water']):
+                    reason = 'Motor or pump may require power supply.'
+                elif any(kw in new_text for kw in ['wifi', 'router', 'internet']):
+                    reason = 'Router or network equipment may require electricity.'
+                elif any(kw in new_text for kw in ['projector', 'lab', 'computer']):
+                    reason = 'Lab equipment or computer may require electricity.'
+                else:
+                    reason = 'This issue may depend on electricity supply.'
+
+        # Rule 2: Water may affect cleaning/washroom/bathroom/toilet/hygiene
+        elif category == 'water':
+            keywords = ['cleaning', 'washroom', 'bathroom', 'toilet', 'hygiene']
+            exclude_keywords = ['leakage', 'leak', 'pipe broken', 'tap broken']
+            if any(kw in new_text for kw in keywords) and not any(kw in new_text for kw in exclude_keywords):
+                reason = 'This issue may depend on water availability.'
+
+        # Rule 3: Drainage may affect smell/hygiene/washroom/bathroom
+        # (check only if no reason set yet from category-based rules)
+        if reason is None and ('drainage' in existing_text or category == 'drainage'):
+            keywords = ['smell', 'bad smell', 'hygiene', 'washroom', 'bathroom']
+            if any(kw in new_text for kw in keywords):
+                reason = 'Bad smell or hygiene issue may be related to drainage.'
+
+        # Rule 4: Wi-Fi may affect online class/lab internet/internet/network
+        if reason is None and category == 'wi-fi':
+            keywords = ['online class', 'lab internet', 'internet', 'network']
+            if any(kw in new_text for kw in keywords):
+                reason = 'This issue may be related to an existing Wi-Fi or network complaint.'
+
+        if reason:
+            suggestions.append((complaint_id, existing_c['id'], reason))
+
+    for c_id, parent_id, r in suggestions:
+        try:
+            db_execute(db,
+                "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status) "
+                "VALUES (?, ?, ?, 'suggested')",
+                (c_id, parent_id, r)
+            )
+        except Exception:
+            pass
+
+    if suggestions:
+        db.commit()
+
+
+# ─── Make helpers available in templates ────────────────────────────────────────
+
+app.jinja_env.globals.update(get_expected_resolution_time=get_expected_resolution_time)
 
 
 # ─── Auth helpers ───────────────────────────────────────────────────────────────
@@ -355,7 +477,34 @@ def user_dashboard():
         (user_id,)
     ).fetchall()
 
-    return render_template('user_dashboard.html', my_complaints=my_complaints, joined=joined, open_complaints=open_complaints)
+    # Get confirmed dependencies for all complaint IDs visible to user
+    all_complaint_ids = set()
+    for c in my_complaints:
+        all_complaint_ids.add(c['id'])
+    for c in joined:
+        all_complaint_ids.add(c['id'])
+    for c in open_complaints:
+        all_complaint_ids.add(c['id'])
+
+    confirmed_deps = {}
+    if all_complaint_ids:
+        placeholders = ','.join('?' * len(all_complaint_ids))
+        dep_rows = db_execute(db,
+            f"SELECT cd.*, c1.title AS complaint_title, c2.title AS parent_title "
+            f"FROM complaint_dependencies cd "
+            f"JOIN complaints c1 ON cd.complaint_id = c1.id "
+            f"JOIN complaints c2 ON cd.depends_on_complaint_id = c2.id "
+            f"WHERE cd.complaint_id IN ({placeholders}) AND cd.status = 'confirmed'",
+            tuple(all_complaint_ids)
+        ).fetchall()
+        for row in dep_rows:
+            cid = row['complaint_id']
+            if cid not in confirmed_deps:
+                confirmed_deps[cid] = []
+            confirmed_deps[cid].append(row)
+
+    return render_template('user_dashboard.html', my_complaints=my_complaints, joined=joined,
+                           open_complaints=open_complaints, confirmed_deps=confirmed_deps)
 
 
 @app.route('/submit', methods=['GET', 'POST'])
@@ -407,6 +556,8 @@ def submit_complaint():
             (complaint_id, session['user_id'], creator_name + ' created complaint')
         )
         db.commit()
+        # Run dependency suggestion logic
+        find_dependency_suggestions(complaint_id)
         flash('Complaint submitted.', 'success')
         return redirect(url_for('user_dashboard'))
 
@@ -444,6 +595,8 @@ def create_new_complaint():
         (complaint_id, session['user_id'], creator_name + ' created complaint')
     )
     db.commit()
+    # Run dependency suggestion logic
+    find_dependency_suggestions(complaint_id)
     flash('Complaint submitted.', 'success')
     return redirect(url_for('user_dashboard'))
 
@@ -517,7 +670,19 @@ def admin_dashboard():
     )
 
     complaints = db_execute(db, query, params).fetchall()
+
+    # Fetch suggested dependencies for admin
+    suggested_deps = db_execute(db,
+        "SELECT cd.*, c1.title AS complaint_title, c2.title AS parent_title "
+        "FROM complaint_dependencies cd "
+        "JOIN complaints c1 ON cd.complaint_id = c1.id "
+        "JOIN complaints c2 ON cd.depends_on_complaint_id = c2.id "
+        "WHERE cd.status = 'suggested' "
+        "ORDER BY cd.created_at DESC"
+    ).fetchall()
+
     return render_template('admin_dashboard.html', complaints=complaints,
+                           suggested_deps=suggested_deps,
                            status_filter=status_filter, category_filter=category_filter)
 
 
@@ -553,9 +718,39 @@ def complaint_detail(complaint_id):
         (complaint_id,)
     ).fetchall()
 
+    # Get suggested dependencies (for admin)
+    suggested_deps = db_execute(db,
+        "SELECT cd.*, c1.title AS complaint_title, c2.title AS parent_title "
+        "FROM complaint_dependencies cd "
+        "JOIN complaints c1 ON cd.complaint_id = c1.id "
+        "JOIN complaints c2 ON cd.depends_on_complaint_id = c2.id "
+        "WHERE cd.complaint_id = ? AND cd.status = 'suggested'",
+        (complaint_id,)
+    ).fetchall()
+
+    # Get confirmed dependencies (for all users)
+    confirmed_deps = db_execute(db,
+        "SELECT cd.*, c1.title AS complaint_title, c2.title AS parent_title "
+        "FROM complaint_dependencies cd "
+        "JOIN complaints c1 ON cd.complaint_id = c1.id "
+        "JOIN complaints c2 ON cd.depends_on_complaint_id = c2.id "
+        "WHERE cd.complaint_id = ? AND cd.status = 'confirmed'",
+        (complaint_id,)
+    ).fetchall()
+
+    # Check if this is a parent of any confirmed dependency (for status update warning)
+    has_linked_children = db_execute(db,
+        "SELECT COUNT(*) FROM complaint_dependencies "
+        "WHERE depends_on_complaint_id = ? AND status = 'confirmed'",
+        (complaint_id,)
+    ).fetchone()[0]
+
     return render_template('complaint_detail.html', complaint=complaint,
                            affected_users=affected_users, affected_count=affected_count,
-                           history=history)
+                           history=history,
+                           suggested_deps=suggested_deps,
+                           confirmed_deps=confirmed_deps,
+                           has_linked_children=has_linked_children)
 
 
 @app.route('/complaint/<int:complaint_id>/status', methods=['POST'])
@@ -577,9 +772,86 @@ def update_status(complaint_id):
         "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
         (complaint_id, session['user_id'], admin_name + ' changed status to ' + new_status)
     )
+
+    # Check if resolving a parent complaint with linked children
+    if new_status == 'Resolved':
+        linked_children = db_execute(db,
+            "SELECT cd.*, c.title AS child_title FROM complaint_dependencies cd "
+            "JOIN complaints c ON cd.complaint_id = c.id "
+            "WHERE cd.depends_on_complaint_id = ? AND cd.status = 'confirmed'",
+            (complaint_id,)
+        ).fetchall()
+        if linked_children:
+            msgs = []
+            for child in linked_children:
+                msgs.append(child['child_title'])
+            db_execute(db,
+                "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+                (complaint_id, session['user_id'], admin_name + ' resolved parent complaint. Linked complaints need review.')
+            )
+            flash('Linked complaint needs review: ' + ', '.join(msgs), 'warning')
+
     db.commit()
     flash('Status updated.', 'success')
     return redirect(url_for('admin_dashboard'))
+
+
+# ─── Dependency Routes ──────────────────────────────────────────────────────────
+
+@app.route('/complaint/<int:complaint_id>/dependency/<int:dep_id>/confirm', methods=['POST'])
+@admin_required
+def confirm_dependency(complaint_id, dep_id):
+    db = get_db()
+    dep = db_execute(db,
+        "SELECT cd.*, c.title AS parent_title FROM complaint_dependencies cd "
+        "JOIN complaints c ON cd.depends_on_complaint_id = c.id "
+        "WHERE cd.id = ? AND cd.complaint_id = ?",
+        (dep_id, complaint_id)
+    ).fetchone()
+
+    if not dep:
+        flash('Dependency not found.', 'danger')
+        return redirect(request.referrer or url_for('admin_dashboard'))
+
+    db_execute(db,
+        "UPDATE complaint_dependencies SET status = 'confirmed' WHERE id = ?",
+        (dep_id,)
+    )
+    admin_name = session.get('name', 'Admin')
+    db_execute(db,
+        "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+        (complaint_id, session['user_id'], admin_name + ' confirmed dependency with ' + dep['parent_title'])
+    )
+    db.commit()
+    flash('Dependency confirmed.', 'success')
+    return redirect(request.referrer or url_for('admin_dashboard'))
+
+
+@app.route('/complaint/<int:complaint_id>/dependency/<int:dep_id>/ignore', methods=['POST'])
+@admin_required
+def ignore_dependency(complaint_id, dep_id):
+    db = get_db()
+    dep = db_execute(db,
+        "SELECT * FROM complaint_dependencies WHERE id = ? AND complaint_id = ?",
+        (dep_id, complaint_id)
+    ).fetchone()
+
+    if not dep:
+        flash('Dependency not found.', 'danger')
+        return redirect(request.referrer or url_for('admin_dashboard'))
+
+    db_execute(db,
+        "UPDATE complaint_dependencies SET status = 'ignored' WHERE id = ?",
+        (dep_id,)
+    )
+    admin_name = session.get('name', 'Admin')
+    db_execute(db,
+        "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+        (complaint_id, session['user_id'], admin_name + ' ignored dependency suggestion')
+    )
+    db.commit()
+    flash('Dependency ignored.', 'info')
+    return redirect(request.referrer or url_for('admin_dashboard'))
 
 
 # ─── API Routes ────────────────────────────────────────────────────────────────
