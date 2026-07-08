@@ -267,18 +267,25 @@ def update_priority(complaint_id):
 def check_single_dependency(child_complaint, parent_complaint):
     """
     Cause-based keyword check: does child_complaint depend on parent_complaint?
-    Uses Category + Cause Keywords + Same Location rules.
+    Uses Category + Cause Keywords rules.
+    Location is used as a confidence booster, not a mandatory rule.
     Returns (reason, confidence) or None.
     """
     child_text = (child_complaint['title'] + ' ' + child_complaint['description']).lower()
     parent_category = parent_complaint['category'].lower()
     child_category = child_complaint['category'].lower()
 
-    # Location check: same first word
+    # Location match check (first word of location) — used as confidence modifier
     child_loc_first = child_complaint['location'].lower().split()[0] if child_complaint['location'] else ''
     parent_loc_first = parent_complaint['location'].lower().split()[0] if parent_complaint['location'] else ''
-    if child_loc_first != parent_loc_first or not child_loc_first:
-        return None
+    location_matches = bool(child_loc_first) and bool(parent_loc_first) and child_loc_first == parent_loc_first
+
+    # Helper: adjust confidence based on location match
+    def adjust_confidence(base_conf):
+        """Same location keeps base confidence; different location caps at Medium."""
+        if location_matches:
+            return base_conf
+        return 'Medium' if base_conf == 'High' else base_conf
 
     # ── PARENT: Electricity ────────────────────────────────────────────
     if parent_category == 'electricity':
@@ -293,13 +300,13 @@ def check_single_dependency(child_complaint, parent_complaint):
         # High confidence: motor/pump/router/projector/lab computer
         high_kw = ['motor', 'pump', 'router', 'projector', 'lab computer', 'computer lab']
         if any(kw in child_text for kw in high_kw):
-            return ('This issue may require electricity. Equipment needs power supply.', 'High')
+            return ('This issue may require electricity. Equipment needs power supply.', adjust_confidence('High'))
 
-        # Wi-Fi power-related keywords → High
+        # Wi-Fi power-related keywords
         if child_category == 'wi-fi':
             wifi_power_kw = ['router off', 'no power', 'router not working', 'wifi not working']
             if any(kw in child_text for kw in wifi_power_kw):
-                return ('Router or network equipment may require electricity.', 'High')
+                return ('Router or network equipment may require electricity.', adjust_confidence('High'))
             # Wi-Fi independent keywords → no dependency
             wifi_independent_kw = ['slow internet', 'password issue', 'login issue', 'slow', 'password']
             if any(kw in child_text for kw in wifi_independent_kw):
