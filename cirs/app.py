@@ -124,6 +124,7 @@ def init_db():
             depends_on_complaint_id INTEGER NOT NULL,
             reason                  TEXT    NOT NULL,
             status                  TEXT    NOT NULL DEFAULT 'suggested',
+            confidence              TEXT    NOT NULL DEFAULT 'Medium',
             created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (complaint_id) REFERENCES complaints(id),
             FOREIGN KEY (depends_on_complaint_id) REFERENCES complaints(id)
@@ -135,6 +136,12 @@ def init_db():
     # Migration: add resolution_notes column if missing (supports both SQLite and PostgreSQL)
     try:
         db_execute(db, "ALTER TABLE complaints ADD COLUMN resolution_notes TEXT DEFAULT ''")
+    except Exception:
+        pass  # Column already exists
+
+    # Migration: add confidence column to complaint_dependencies
+    try:
+        db_execute(db, "ALTER TABLE complaint_dependencies ADD COLUMN confidence TEXT DEFAULT 'Medium'")
     except Exception:
         pass  # Column already exists
 
@@ -257,89 +264,124 @@ def update_priority(complaint_id):
 
 # ─── Dependency Suggestion Logic ───────────────────────────────────────────────
 
+def check_single_dependency(child_complaint, parent_complaint):
+    """
+    Cause-based keyword check: does child_complaint depend on parent_complaint?
+    Uses Category + Cause Keywords + Same Location rules.
+    Returns (reason, confidence) or None.
+    """
+    child_text = (child_complaint['title'] + ' ' + child_complaint['description']).lower()
+    parent_category = parent_complaint['category'].lower()
+    child_category = child_complaint['category'].lower()
+
+    # Location check: same first word
+    child_loc_first = child_complaint['location'].lower().split()[0] if child_complaint['location'] else ''
+    parent_loc_first = parent_complaint['location'].lower().split()[0] if parent_complaint['location'] else ''
+    if child_loc_first != parent_loc_first or not child_loc_first:
+        return None
+
+    # ── PARENT: Electricity ────────────────────────────────────────────
+    if parent_category == 'electricity':
+        # Water with leak/pipe/tap keywords → independent plumbing (NO dependency)
+        if child_category == 'water':
+            plumbing_kw = ['leak', 'leakage', 'pipe', 'pipeline', 'tap broken', 'valve', 'blockage']
+            if any(kw in child_text for kw in plumbing_kw):
+                return None  # Independent plumbing issue
+            if 'tank has water' in child_text or 'water stored' in child_text:
+                return None  # Not electricity-related
+
+        # High confidence: motor/pump/router/projector/lab computer
+        high_kw = ['motor', 'pump', 'router', 'projector', 'lab computer', 'computer lab']
+        if any(kw in child_text for kw in high_kw):
+            return ('This issue may require electricity. Equipment needs power supply.', 'High')
+
+        # Wi-Fi power-related keywords → High
+        if child_category == 'wi-fi':
+            wifi_power_kw = ['router off', 'no power', 'router not working', 'wifi not working']
+            if any(kw in child_text for kw in wifi_power_kw):
+                return ('Router or network equipment may require electricity.', 'High')
+            # Wi-Fi independent keywords → no dependency
+            wifi_independent_kw = ['slow internet', 'password issue', 'login issue', 'slow', 'password']
+            if any(kw in child_text for kw in wifi_independent_kw):
+                return None
+
+        # Medium confidence: general dependency hints
+        medium_kw = [
+            'water not coming', 'tank empty', 'overhead tank', 'bore motor', 'refill',
+            'no supply', 'no power'
+        ]
+        if any(kw in child_text for kw in medium_kw):
+            return ('This issue may depend on electricity supply. Admin should verify.', 'Medium')
+
+    # ── PARENT: Water ──────────────────────────────────────────────────
+    elif parent_category == 'water':
+        water_kw = ['cleaning', 'washroom', 'bathroom', 'toilet', 'hygiene', 'flushing']
+        if any(kw in child_text for kw in water_kw):
+            return ('This issue may depend on water availability.', 'Medium')
+
+    # ── PARENT: Wi-Fi ──────────────────────────────────────────────────
+    elif parent_category == 'wi-fi':
+        wifi_kw = ['online class', 'lab internet', 'internet', 'network', 'online']
+        if any(kw in child_text for kw in wifi_kw):
+            return ('This issue may depend on Wi-Fi or network connectivity.', 'Medium')
+
+    return None
+
+
 def find_dependency_suggestions(complaint_id):
-    """After a complaint is created, find possible dependencies and insert suggestions."""
+    """
+    After a complaint is created, find possible dependencies in BOTH directions:
+      1. New complaint depends on existing complaint (child → parent)
+      2. Existing complaint depends on new complaint (parent ← child)
+    Uses cause-based keyword rules with confidence levels.
+    """
     db = get_db()
 
-    complaint = db_execute(db, "SELECT * FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
-    if not complaint:
+    new_complaint = db_execute(db, "SELECT * FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
+    if not new_complaint:
         return
 
-    new_text = (complaint['title'] + ' ' + complaint['description']).lower()
-    new_location = complaint['location'].lower()
-    new_location_first = new_location.split()[0] if new_location else ''
-
-    # Find unresolved complaints in similar location
+    # Find all unresolved complaints (excluding self)
     existing = db_execute(db,
         "SELECT * FROM complaints WHERE id != ? AND status != 'Resolved'",
         (complaint_id,)
     ).fetchall()
 
-    # Check already linked
+    # Collect already-linked pairs to avoid duplicates
     linked_rows = db_execute(db,
-        "SELECT depends_on_complaint_id FROM complaint_dependencies WHERE complaint_id = ?",
-        (complaint_id,)
+        "SELECT complaint_id, depends_on_complaint_id FROM complaint_dependencies WHERE complaint_id = ? OR depends_on_complaint_id = ?",
+        (complaint_id, complaint_id)
     ).fetchall()
-    already_linked = {row['depends_on_complaint_id'] for row in linked_rows}
+    already_linked = set()
+    for row in linked_rows:
+        already_linked.add((row['complaint_id'], row['depends_on_complaint_id']))
 
     suggestions = []
 
     for existing_c in existing:
-        if existing_c['id'] in already_linked:
-            continue
+        # Direction 1: New complaint depends on existing complaint
+        if (complaint_id, existing_c['id']) not in already_linked:
+            result = check_single_dependency(new_complaint, existing_c)
+            if result:
+                reason, confidence = result
+                suggestions.append((complaint_id, existing_c['id'], reason, confidence))
+                already_linked.add((complaint_id, existing_c['id']))
 
-        # Check similar location (same first word of location)
-        existing_loc = existing_c['location'].lower()
-        existing_loc_first = existing_loc.split()[0] if existing_loc else ''
-        if new_location_first != existing_loc_first:
-            continue
+        # Direction 2: Existing complaint depends on new complaint
+        # Skip if we already suggested the reverse direction (circular prevention)
+        if (existing_c['id'], complaint_id) not in already_linked and (complaint_id, existing_c['id']) not in already_linked:
+            result = check_single_dependency(existing_c, new_complaint)
+            if result:
+                reason, confidence = result
+                suggestions.append((existing_c['id'], complaint_id, reason, confidence))
+                already_linked.add((existing_c['id'], complaint_id))
 
-        reason = None
-        existing_text = (existing_c['title'] + ' ' + existing_c['description']).lower()
-        category = existing_c['category'].lower()
-
-        # Rule 1: Electricity may affect motor/pump/water/wifi/router/internet/projector/lab/computer
-        if category == 'electricity':
-            keywords = ['motor', 'pump', 'water', 'wifi', 'router', 'internet', 'projector', 'lab', 'computer']
-            if any(kw in new_text for kw in keywords):
-                if any(kw in new_text for kw in ['motor', 'pump', 'water']):
-                    reason = 'Motor or pump may require power supply.'
-                elif any(kw in new_text for kw in ['wifi', 'router', 'internet']):
-                    reason = 'Router or network equipment may require electricity.'
-                elif any(kw in new_text for kw in ['projector', 'lab', 'computer']):
-                    reason = 'Lab equipment or computer may require electricity.'
-                else:
-                    reason = 'This issue may depend on electricity supply.'
-
-        # Rule 2: Water may affect cleaning/washroom/bathroom/toilet/hygiene
-        elif category == 'water':
-            keywords = ['cleaning', 'washroom', 'bathroom', 'toilet', 'hygiene']
-            exclude_keywords = ['leakage', 'leak', 'pipe broken', 'tap broken']
-            if any(kw in new_text for kw in keywords) and not any(kw in new_text for kw in exclude_keywords):
-                reason = 'This issue may depend on water availability.'
-
-        # Rule 3: Drainage may affect smell/hygiene/washroom/bathroom
-        # (check only if no reason set yet from category-based rules)
-        if reason is None and ('drainage' in existing_text or category == 'drainage'):
-            keywords = ['smell', 'bad smell', 'hygiene', 'washroom', 'bathroom']
-            if any(kw in new_text for kw in keywords):
-                reason = 'Bad smell or hygiene issue may be related to drainage.'
-
-        # Rule 4: Wi-Fi may affect online class/lab internet/internet/network
-        if reason is None and category == 'wi-fi':
-            keywords = ['online class', 'lab internet', 'internet', 'network']
-            if any(kw in new_text for kw in keywords):
-                reason = 'This issue may be related to an existing Wi-Fi or network complaint.'
-
-        if reason:
-            suggestions.append((complaint_id, existing_c['id'], reason))
-
-    for c_id, parent_id, r in suggestions:
+    for c_id, parent_id, reason, confidence in suggestions:
         try:
             db_execute(db,
-                "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status) "
-                "VALUES (?, ?, ?, 'suggested')",
-                (c_id, parent_id, r)
+                "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status, confidence) "
+                "VALUES (?, ?, ?, 'suggested', ?)",
+                (c_id, parent_id, reason, confidence)
             )
         except Exception:
             pass

@@ -66,6 +66,14 @@
                             <span class="dep-parent">{{ dep.parent_title }}</span>
                         </div>
                         <div class="dep-reason">Reason: {{ dep.reason }}</div>
+                        <div class="dep-confidence" style="margin:6px 0;">
+                            Confidence:
+                            <span class="badge
+                                {% if dep.confidence == 'High' %}badge-danger
+                                {% else %}badge-warning{% endif %}">
+                                {{ dep.confidence }}
+                            </span>
+                        </div>
                         <div class="dep-actions">
                             <form method="POST" action="{{ url_for('confirm_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
