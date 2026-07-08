@@ -137,7 +137,7 @@ def init_db():
 
 def seed_demo_data():
     db = get_db()
-    existing = db_execute(db, "SELECT COUNT(*) FROM users").fetchone()[0]
+    existing = db_execute(db, "SELECT COUNT(*) AS cnt FROM users").fetchone()['cnt']
     if existing > 0:
         return
 
@@ -191,9 +191,9 @@ def find_similar_complaints(title, description, category, location):
 
         if sim >= 0.4:
             count = db_execute(db,
-                "SELECT COUNT(*) FROM complaint_users WHERE complaint_id = ?",
+                "SELECT COUNT(*) AS cnt FROM complaint_users WHERE complaint_id = ?",
                 (row['id'],)
-            ).fetchone()[0]
+            ).fetchone()['cnt']
             similar.append({
                 'id': row['id'],
                 'title': row['title'],
@@ -236,9 +236,9 @@ def get_expected_resolution_time(category, priority):
 def update_priority(complaint_id):
     db = get_db()
     count = db_execute(db,
-        "SELECT COUNT(*) FROM complaint_users WHERE complaint_id = ?",
+        "SELECT COUNT(*) AS cnt FROM complaint_users WHERE complaint_id = ?",
         (complaint_id,)
-    ).fetchone()[0]
+    ).fetchone()['cnt']
     new_priority = calculate_priority(count)
     db_execute(db,
         "UPDATE complaints SET priority = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -541,7 +541,7 @@ def submit_complaint():
             "VALUES (?, ?, ?, ?, 'Pending', 'Low', ?) RETURNING id",
             (title, description, category, location, session['user_id'])
         )
-        complaint_id = cursor.fetchone()[0]
+        complaint_id = getattr(cursor, '_lastrowid', None) or cursor.fetchone()[0]
         # Add creator as an affected user with role_in_complaint='creator'
         db_execute(db,
             "INSERT INTO complaint_users (complaint_id, user_id, role_in_complaint) VALUES (?, ?, 'creator') "
@@ -580,7 +580,7 @@ def create_new_complaint():
         "VALUES (?, ?, ?, ?, 'Pending', 'Low', ?) RETURNING id",
         (pending['title'], pending['description'], pending['category'], pending['location'], session['user_id'])
     )
-    complaint_id = cursor.fetchone()[0]
+    complaint_id = getattr(cursor, '_lastrowid', None) or cursor.fetchone()[0]
     # Add creator as an affected user with role_in_complaint='creator'
     db_execute(db,
         "INSERT INTO complaint_users (complaint_id, user_id, role_in_complaint) VALUES (?, ?, 'creator') "
@@ -739,10 +739,10 @@ def complaint_detail(complaint_id):
 
     # Check if this is a parent of any confirmed dependency (for status update warning)
     has_linked_children = db_execute(db,
-        "SELECT COUNT(*) FROM complaint_dependencies "
+        "SELECT COUNT(*) AS cnt FROM complaint_dependencies "
         "WHERE depends_on_complaint_id = ? AND status = 'confirmed'",
         (complaint_id,)
-    ).fetchone()[0]
+    ).fetchone()['cnt']
 
     return render_template('complaint_detail.html', complaint=complaint,
                            affected_users=affected_users, affected_count=affected_count,
