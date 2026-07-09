@@ -374,6 +374,76 @@ def seed_demo_data():
     db.commit()
 
 
+# ─── Always ensure demo dependency exists ───────────────────────────────────────
+
+def _ensure_demo_complaint(db, title, desc, cat, itype, loc, creator_id, creator_name):
+    """Find existing complaint by title or create one. Returns complaint id."""
+    existing = db_execute(db, "SELECT id FROM complaints WHERE title = ?", (title,)).fetchone()
+    if existing:
+        # Update issue_type to match demo expectations
+        db_execute(db, "UPDATE complaints SET category = ?, issue_type = ?, location = ? WHERE id = ?",
+                   (cat, itype, loc, existing['id']))
+        return existing['id']
+
+    # Create complaint
+    cur = db_execute(db,
+        "INSERT INTO complaints (title, description, category, issue_type, location, status, priority, created_by) "
+        "VALUES (?, ?, ?, ?, ?, 'Pending', 'Low', ?) RETURNING id",
+        (title, desc, cat, itype, loc, creator_id))
+    cid = getattr(cur, '_lastrowid', None) or cur.fetchone()['id']
+    # Add creator
+    db_execute(db,
+        "INSERT INTO complaint_users (complaint_id, user_id, role_in_complaint) VALUES (?, ?, 'creator') "
+        "ON CONFLICT DO NOTHING",
+        (cid, creator_id))
+    db_execute(db,
+        "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+        (cid, creator_id, creator_name + ' created complaint'))
+    return cid
+
+
+def seed_demo_dependency():
+    """Always ensure the demo dependency example exists in the database."""
+    db = get_db()
+
+    # Get admin user id
+    admin = db_execute(db, "SELECT id FROM users WHERE email = ?", ('admin@cirs.com',)).fetchone()
+    student1 = db_execute(db, "SELECT id FROM users WHERE email = ?", ('student1@cirs.com',)).fetchone()
+    student2 = db_execute(db, "SELECT id FROM users WHERE email = ?", ('student2@cirs.com',)).fetchone()
+    if not admin or not student1 or not student2:
+        return  # Users not seeded yet
+
+    a1 = admin['id']
+    s1 = student1['id']
+    s2 = student2['id']
+
+    # Ensure demo complaints exist
+    c2 = _ensure_demo_complaint(db,
+        'Electricity failure in Hostel Block A',
+        'Power supply is unavailable in Hostel Block A. Lights and fans are not working.',
+        'Electricity', 'Power Cut', 'Hostel Block A', s1, 'Student One')
+
+    c3 = _ensure_demo_complaint(db,
+        'Water motor not working',
+        'Motor is not running and water is not coming to the overhead tank.',
+        'Water', 'Motor/Pump Not Working', 'Hostel Block A', s2, 'Student Two')
+
+    db.commit()
+
+    # Ensure dependency row exists (child → parent)
+    existing_dep = db_execute(db,
+        "SELECT id FROM complaint_dependencies WHERE complaint_id = ? AND depends_on_complaint_id = ?",
+        (c3, c2)
+    ).fetchone()
+
+    if not existing_dep:
+        db_execute(db,
+            "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status, confidence) "
+            "VALUES (?, ?, ?, 'suggested', ?)",
+            (c3, c2, 'Water supply may require motor or pump, and motor requires electricity.', 'High'))
+        db.commit()
+
+
 # ─── Similarity logic ───────────────────────────────────────────────────────────
 
 def tokenize(text):
@@ -1218,6 +1288,7 @@ def api_my_complaints():
 with app.app_context():
     init_db()
     seed_demo_data()
+    seed_demo_dependency()
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
