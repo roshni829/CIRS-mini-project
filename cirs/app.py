@@ -157,6 +157,7 @@ def get_sla_hours(category, priority):
 def init_db():
     db = get_db()
     statements = [
+        """CREATE TABLE IF NOT EXISTS users (
             id          SERIAL PRIMARY KEY,
             name        TEXT    NOT NULL,
             email       TEXT    UNIQUE NOT NULL,
