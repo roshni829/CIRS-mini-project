@@ -77,8 +77,19 @@
                                 </select>
                             </div>
                             <div class="form-group">
+                                <label for="issue_type">Cause of Issue</label>
+                                <select class="form-control" id="issue_type" name="issue_type" required>
+                                    <option value="">Select cause</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
                                 <label for="location">Location</label>
                                 <input type="text" class="form-control" id="location" name="location" required placeholder="e.g., Hostel Block A">
+                            </div>
+                            <div class="form-group">
+                                <!-- Empty placeholder for alignment -->
                             </div>
                         </div>
 
@@ -149,6 +160,33 @@
         </div>
     </div>
     {% endif %}
+
+    <script>
+        // Dynamic Cause of Issue dropdown based on category
+        const issueTypeOptions = {
+            'Electricity': ['Power Cut', 'Low Voltage', 'Wiring Issue', 'Switch/Board Issue', 'Other'],
+            'Water': ['Water Not Coming', 'Tank Empty', 'Motor/Pump Not Working', 'Pipe Leakage', 'Tap Broken', 'Other'],
+            'Wi-Fi': ['Router Not Working', 'Slow Internet', 'No Network', 'Password/Login Issue', 'Other'],
+            'Cleanliness': ['Washroom Cleaning', 'Garbage Issue', 'Bad Smell', 'Other'],
+            'Classroom': ['Other'],
+            'Hostel': ['Other'],
+            'Other': ['Other'],
+        };
+
+        document.getElementById('category').addEventListener('change', function() {
+            const issueTypeSelect = document.getElementById('issue_type');
+            const category = this.value;
+            issueTypeSelect.innerHTML = '<option value="">Select cause</option>';
+
+            const options = issueTypeOptions[category] || ['Other'];
+            options.forEach(function(opt) {
+                const option = document.createElement('option');
+                option.value = opt;
+                option.textContent = opt;
+                issueTypeSelect.appendChild(option);
+            });
+        });
+    </script>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>

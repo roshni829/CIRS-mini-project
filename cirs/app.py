@@ -60,6 +60,58 @@ def db_execute(db, sql, params=None):
 app.teardown_appcontext(close_db)
 
 
+def _infer_issue_type(category, title, description):
+    """Infer issue_type from category + title/description for existing complaints."""
+    text = (title + ' ' + description).lower()
+    cat = category.lower()
+
+    if cat == 'electricity':
+        if any(kw in text for kw in ['power cut', 'no power', 'power supply']):
+            return 'Power Cut'
+        if any(kw in text for kw in ['low voltage', 'voltage']):
+            return 'Low Voltage'
+        if any(kw in text for kw in ['wiring', 'wire']):
+            return 'Wiring Issue'
+        if any(kw in text for kw in ['switch', 'board issue']):
+            return 'Switch/Board Issue'
+        return 'Power Cut'  # default for electricity
+
+    if cat == 'water':
+        if any(kw in text for kw in ['motor', 'pump not working']):
+            return 'Motor/Pump Not Working'
+        if any(kw in text for kw in ['leak', 'leakage', 'pipe']):
+            return 'Pipe Leakage'
+        if any(kw in text for kw in ['tap broken', 'tap']):
+            return 'Tap Broken'
+        if any(kw in text for kw in ['tank empty', 'overhead tank']):
+            return 'Tank Empty'
+        if any(kw in text for kw in ['water not coming', 'no water']):
+            return 'Water Not Coming'
+        return 'Other'
+
+    if cat in ('wi-fi', 'wifi'):
+        if any(kw in text for kw in ['router not working', 'router']):
+            return 'Router Not Working'
+        if any(kw in text for kw in ['slow internet', 'slow']):
+            return 'Slow Internet'
+        if any(kw in text for kw in ['no network', 'network', 'not working', 'down']):
+            return 'No Network'
+        if any(kw in text for kw in ['password', 'login']):
+            return 'Password/Login Issue'
+        return 'Other'
+
+    if cat == 'cleanliness':
+        if any(kw in text for kw in ['washroom', 'toilet', 'bathroom cleaning']):
+            return 'Washroom Cleaning'
+        if any(kw in text for kw in ['garbage', 'trash', 'waste']):
+            return 'Garbage Issue'
+        if any(kw in text for kw in ['bad smell', 'smell', 'odour']):
+            return 'Bad Smell'
+        return 'Other'
+
+    return 'Other'
+
+
 def init_db():
     db = get_db()
     statements = [
@@ -76,6 +128,7 @@ def init_db():
             title       TEXT    NOT NULL,
             description TEXT    NOT NULL,
             category    TEXT    NOT NULL,
+            issue_type  TEXT    DEFAULT '',
             location    TEXT    NOT NULL,
             status      TEXT    NOT NULL DEFAULT 'Pending',
             priority    TEXT    NOT NULL DEFAULT 'Low',
@@ -131,6 +184,26 @@ def init_db():
     except Exception:
         pass
 
+    # Migration: add issue_type column to complaints
+    try:
+        db_execute(db, "ALTER TABLE complaints ADD COLUMN issue_type TEXT DEFAULT ''")
+    except Exception:
+        pass
+
+    # Migration: infer issue_type for existing complaints where it's empty
+    try:
+        rows = db_execute(db,
+            "SELECT id, category, title, description FROM complaints WHERE issue_type IS NULL OR issue_type = ''"
+        ).fetchall()
+        for row in rows:
+            inferred = _infer_issue_type(row['category'], row['title'], row['description'])
+            if inferred:
+                db_execute(db, "UPDATE complaints SET issue_type = ? WHERE id = ?", (inferred, row['id']))
+        if rows:
+            db.commit()
+    except Exception:
+        pass
+
     db.commit()
 
 
@@ -175,11 +248,11 @@ def seed_demo_data():
 
     # ── Create 6 complaints ───────────────────────────────────────────────
 
-    def _make_complaint(title, desc, cat, loc, status, priority, creator_id, creator_name):
+    def _make_complaint(title, desc, cat, itype, loc, status, priority, creator_id, creator_name):
         cid = _insert(
-            "INSERT INTO complaints (title, description, category, location, status, priority, created_by) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (title, desc, cat, loc, status, priority, creator_id))
+            "INSERT INTO complaints (title, description, category, issue_type, location, status, priority, created_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (title, desc, cat, itype, loc, status, priority, creator_id))
         db_execute(db,
             "INSERT INTO complaint_users (complaint_id, user_id, role_in_complaint) VALUES (?, ?, 'creator')",
             (cid, creator_id))
@@ -223,32 +296,32 @@ def seed_demo_data():
     c1 = _make_complaint(
         'Wi-Fi not working in Hostel Block A',
         'The Wi-Fi network has been down since yesterday. Students are unable to access the internet for online classes.',
-        'Wi-Fi', 'Hostel Block A', 'In Progress', 'Medium', s1, 'Student One')
+        'Wi-Fi', 'No Network', 'Hostel Block A', 'In Progress', 'Medium', s1, 'Student One')
     _join(c1, s2, 'Student Two')
     _join(c1, s3, 'Student Three')
     _set_status(c1, 'In Progress', 'Admin User')
     _set_priority(c1, 3)
     db.commit()
 
-    # ── C2: Electricity issue (Student One) ────────────────────────────────
+    # ── C2: Electricity failure (Student One) ────────────────────────────────
     c2 = _make_complaint(
-        'Electricity issue in Hostel Block A',
+        'Electricity failure in Hostel Block A',
         'Power supply is unavailable in Hostel Block A. Lights and fans are not working.',
-        'Electricity', 'Hostel Block A', 'Pending', 'Low', s1, 'Student One')
+        'Electricity', 'Power Cut', 'Hostel Block A', 'Pending', 'Low', s1, 'Student One')
     db.commit()
 
     # ── C3: Water motor not working (Student Two) ──────────────────────────
     c3 = _make_complaint(
         'Water motor not working',
         'Motor is not running and water is not coming to the overhead tank.',
-        'Water', 'Hostel Block A', 'Pending', 'Low', s2, 'Student Two')
+        'Water', 'Motor/Pump Not Working', 'Hostel Block A', 'Pending', 'Low', s2, 'Student Two')
     db.commit()
 
     # ── C4: Leaking tap (Student Three) ────────────────────────────────────
     c4 = _make_complaint(
-        'Leaking tap in Boys Washroom',
+        'Water leakage near bathroom',
         'The tap in the ground floor boys washroom is continuously leaking. Water is being wasted.',
-        'Water', 'Academic Block', 'In Progress', 'Low', s3, 'Student Three')
+        'Water', 'Pipe Leakage', 'Academic Block', 'In Progress', 'Low', s3, 'Student Three')
     _join(c4, s1, 'Student One')
     _set_status(c4, 'In Progress', 'Admin User')
     _set_priority(c4, 2)
@@ -258,7 +331,7 @@ def seed_demo_data():
     c5 = _make_complaint(
         'Projector bulb fuse in Room 201',
         'The projector bulb in classroom 201 has fused. Unable to conduct presentations.',
-        'Classroom', 'Room 201', 'Resolved', 'Low', s2, 'Student Two')
+        'Classroom', 'Other', 'Room 201', 'Resolved', 'Low', s2, 'Student Two')
     _set_status(c5, 'Resolved', 'Admin User', 'Replaced the projector bulb. Working normally now.')
     db.commit()
 
@@ -266,7 +339,7 @@ def seed_demo_data():
     c6 = _make_complaint(
         'Slow internet in Computer Lab',
         'The internet speed in the computer lab is extremely slow. Unable to load websites and access lab resources.',
-        'Wi-Fi', 'Computer Lab', 'Pending', 'Medium', s3, 'Student Three')
+        'Wi-Fi', 'Slow Internet', 'Computer Lab', 'Pending', 'Medium', s3, 'Student Three')
     _join(c6, s1, 'Student One')
     _join(c6, s2, 'Student Two')
     _join(c6, a1, 'Admin User')  # Admin also joined to show they're affected
@@ -276,21 +349,21 @@ def seed_demo_data():
     # ── Dependencies ───────────────────────────────────────────────────────
 
     # Dep 1: C3 (Water motor) → C2 (Electricity) — SUGGESTED
-    # Water motor depends on electricity: motor keyword, same location (Hostel Block A)
+    # Water motor depends on electricity: issue_type rule, same location
     db_execute(db,
         "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status, confidence) "
         "VALUES (?, ?, ?, 'suggested', ?)",
-        (c3, c2, 'This issue may require electricity. Equipment needs power supply.', 'High'))
+        (c3, c2, 'Water supply may require motor or pump, and motor requires electricity.', 'High'))
 
     # Dep 2: C1 (Wi-Fi not working) → C2 (Electricity) — CONFIRMED
-    # Wi-Fi router needs power
+    # Wi-Fi router needs power: issue_type rule, same location
     db_execute(db,
         "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status, confidence) "
         "VALUES (?, ?, ?, 'confirmed', ?)",
         (c1, c2, 'Router or network equipment may require electricity.', 'High'))
     db_execute(db,
         "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
-        (c1, a1, 'Admin User confirmed dependency with Electricity issue in Hostel Block A'))
+        (c1, a1, 'Admin User confirmed dependency with Electricity failure in Hostel Block A'))
 
     db.commit()
 
@@ -388,73 +461,114 @@ def update_priority(complaint_id):
 
 # ─── Dependency Suggestion Logic ───────────────────────────────────────────────
 
+def _location_matches(loc1, loc2):
+    """Check if first word of two locations match."""
+    if not loc1 or not loc2:
+        return False
+    return loc1.lower().split()[0] == loc2.lower().split()[0]
+
+
+def _adjust_confidence(base_conf, location_matches):
+    """Same location keeps base; different location caps at Medium."""
+    if location_matches:
+        return base_conf
+    return 'Medium' if base_conf == 'High' else base_conf
+
+
+def _location_note(location_matches):
+    """Return a location suffix for the reason text."""
+    if location_matches:
+        return ''
+    return ' Location differs. Admin should verify before confirming.'
+
+
+# ── Issue-type-based dependency rules ──────────────────────────────────────
+
+DEPENDENCY_RULES = [
+    # Rule 1: Electricity (Power Cut) → Water (Motor/Pump, Tank Empty, Water Not Coming)
+    {
+        'parent_cat': 'Electricity',
+        'parent_type': 'Power Cut',
+        'child_cat': 'Water',
+        'child_types': ['Motor/Pump Not Working'],
+        'reason': 'Water supply may require motor or pump, and motor requires electricity.',
+        'confidence': 'High',
+    },
+    {
+        'parent_cat': 'Electricity',
+        'parent_type': 'Power Cut',
+        'child_cat': 'Water',
+        'child_types': ['Tank Empty', 'Water Not Coming'],
+        'reason': 'Water supply may require motor or pump, and motor requires electricity.',
+        'confidence': 'Medium',
+    },
+    # Rule 2: Electricity (Power Cut) → Wi-Fi (Router Not Working, No Network)
+    {
+        'parent_cat': 'Electricity',
+        'parent_type': 'Power Cut',
+        'child_cat': 'Wi-Fi',
+        'child_types': ['Router Not Working', 'No Network'],
+        'reason': 'Router or network equipment may require electricity.',
+        'confidence': 'High',
+    },
+    # Rule 3: Water (Water Not Coming, Tank Empty) → Cleanliness (Washroom Cleaning, Bad Smell)
+    {
+        'parent_cat': 'Water',
+        'parent_type': 'Water Not Coming',
+        'child_cat': 'Cleanliness',
+        'child_types': ['Washroom Cleaning', 'Bad Smell'],
+        'reason': 'Cleaning may depend on water availability.',
+        'confidence': 'Medium',
+    },
+    {
+        'parent_cat': 'Water',
+        'parent_type': 'Tank Empty',
+        'child_cat': 'Cleanliness',
+        'child_types': ['Washroom Cleaning', 'Bad Smell'],
+        'reason': 'Cleaning may depend on water availability.',
+        'confidence': 'Medium',
+    },
+]
+
+
+# ── Negative rules (independent — do NOT suggest dependency) ───────────────
+
+NEGATIVE_RULES = [
+    ('Water', 'Pipe Leakage'),
+    ('Water', 'Tap Broken'),
+    ('Wi-Fi', 'Slow Internet'),
+    ('Wi-Fi', 'Password/Login Issue'),
+]
+
+
 def check_single_dependency(child_complaint, parent_complaint):
     """
-    Cause-based keyword check: does child_complaint depend on parent_complaint?
-    Uses Category + Cause Keywords rules.
-    Location is used as a confidence booster, not a mandatory rule.
-    Returns (reason, confidence) or None.
+    Check if child_complaint depends on parent_complaint using issue_type rules.
+    Returns (reason_with_location, confidence) or None.
     """
-    child_text = (child_complaint['title'] + ' ' + child_complaint['description']).lower()
-    parent_category = parent_complaint['category'].lower()
-    child_category = child_complaint['category'].lower()
+    parent_cat = parent_complaint.get('category', '')
+    parent_type = parent_complaint.get('issue_type', '')
+    child_cat = child_complaint.get('category', '')
+    child_type = child_complaint.get('issue_type', '')
 
-    # Location match check (first word of location) — used as confidence modifier
-    child_loc_first = child_complaint['location'].lower().split()[0] if child_complaint['location'] else ''
-    parent_loc_first = parent_complaint['location'].lower().split()[0] if parent_complaint['location'] else ''
-    location_matches = bool(child_loc_first) and bool(parent_loc_first) and child_loc_first == parent_loc_first
+    # Check negative rules first: if child matches, no dependency
+    if (child_cat, child_type) in NEGATIVE_RULES:
+        return None
 
-    # Helper: adjust confidence based on location match
-    def adjust_confidence(base_conf):
-        """Same location keeps base confidence; different location caps at Medium."""
-        if location_matches:
-            return base_conf
-        return 'Medium' if base_conf == 'High' else base_conf
+    loc_match = _location_matches(
+        child_complaint.get('location', ''),
+        parent_complaint.get('location', '')
+    )
 
-    # ── PARENT: Electricity ────────────────────────────────────────────
-    if parent_category == 'electricity':
-        # Water with leak/pipe/tap keywords → independent plumbing (NO dependency)
-        if child_category == 'water':
-            plumbing_kw = ['leak', 'leakage', 'pipe', 'pipeline', 'tap broken', 'valve', 'blockage']
-            if any(kw in child_text for kw in plumbing_kw):
-                return None  # Independent plumbing issue
-            if 'tank has water' in child_text or 'water stored' in child_text:
-                return None  # Not electricity-related
+    for rule in DEPENDENCY_RULES:
+        if (rule['parent_cat'] == parent_cat and
+            rule['parent_type'] == parent_type and
+            rule['child_cat'] == child_cat and
+            child_type in rule['child_types']):
 
-        # High confidence: motor/pump/router/projector/lab computer
-        high_kw = ['motor', 'pump', 'router', 'projector', 'lab computer', 'computer lab']
-        if any(kw in child_text for kw in high_kw):
-            return ('This issue may require electricity. Equipment needs power supply.', adjust_confidence('High'))
-
-        # Wi-Fi power-related keywords
-        if child_category == 'wi-fi':
-            wifi_power_kw = ['router off', 'no power', 'router not working', 'wifi not working']
-            if any(kw in child_text for kw in wifi_power_kw):
-                return ('Router or network equipment may require electricity.', adjust_confidence('High'))
-            # Wi-Fi independent keywords → no dependency
-            wifi_independent_kw = ['slow internet', 'password issue', 'login issue', 'slow', 'password']
-            if any(kw in child_text for kw in wifi_independent_kw):
-                return None
-
-        # Medium confidence: general dependency hints
-        medium_kw = [
-            'water not coming', 'tank empty', 'overhead tank', 'bore motor', 'refill',
-            'no supply', 'no power'
-        ]
-        if any(kw in child_text for kw in medium_kw):
-            return ('This issue may depend on electricity supply. Admin should verify.', 'Medium')
-
-    # ── PARENT: Water ──────────────────────────────────────────────────
-    elif parent_category == 'water':
-        water_kw = ['cleaning', 'washroom', 'bathroom', 'toilet', 'hygiene', 'flushing']
-        if any(kw in child_text for kw in water_kw):
-            return ('This issue may depend on water availability.', 'Medium')
-
-    # ── PARENT: Wi-Fi ──────────────────────────────────────────────────
-    elif parent_category == 'wi-fi':
-        wifi_kw = ['online class', 'lab internet', 'internet', 'network', 'online']
-        if any(kw in child_text for kw in wifi_kw):
-            return ('This issue may depend on Wi-Fi or network connectivity.', 'Medium')
+            confidence = _adjust_confidence(rule['confidence'], loc_match)
+            reason = rule['reason'] + _location_note(loc_match)
+            return (reason, confidence)
 
     return None
 
@@ -464,7 +578,7 @@ def find_dependency_suggestions(complaint_id):
     After a complaint is created, find possible dependencies in BOTH directions:
       1. New complaint depends on existing complaint (child → parent)
       2. Existing complaint depends on new complaint (parent ← child)
-    Uses cause-based keyword rules with confidence levels.
+    Uses issue-type-based rules with confidence levels.
     """
     db = get_db()
 
@@ -507,6 +621,7 @@ def find_dependency_suggestions(complaint_id):
                 suggestions.append((existing_c['id'], complaint_id, reason, confidence))
                 already_linked.add((existing_c['id'], complaint_id))
 
+    inserted_count = 0
     for c_id, parent_id, reason, confidence in suggestions:
         try:
             db_execute(db,
@@ -514,11 +629,13 @@ def find_dependency_suggestions(complaint_id):
                 "VALUES (?, ?, ?, 'suggested', ?)",
                 (c_id, parent_id, reason, confidence)
             )
-        except Exception:
-            pass
+            inserted_count += 1
+        except Exception as e:
+            print(f"Dependency insert error: {e}")
 
     if suggestions:
         db.commit()
+        print(f"Dependency suggestions inserted: {inserted_count}")
 
 
 # ─── Jinja2 filters ──────────────────────────────────────────────────────────────
@@ -716,6 +833,7 @@ def submit_complaint():
         title = request.form['title'].strip()
         description = request.form['description'].strip()
         category = request.form['category']
+        issue_type = request.form.get('issue_type', '').strip()
         location = request.form['location'].strip()
 
         if not title or not description or not category or not location:
@@ -729,15 +847,16 @@ def submit_complaint():
                 'title': title,
                 'description': description,
                 'category': category,
+                'issue_type': issue_type,
                 'location': location
             }
             return render_template('submit_complaint.html', show_similar_modal=True, similar=similar)
 
         db = get_db()
         cursor = db_execute(db,
-            "INSERT INTO complaints (title, description, category, location, status, priority, created_by) "
-            "VALUES (?, ?, ?, ?, 'Pending', 'Low', ?) RETURNING id",
-            (title, description, category, location, session['user_id'])
+            "INSERT INTO complaints (title, description, category, issue_type, location, status, priority, created_by) "
+            "VALUES (?, ?, ?, ?, ?, 'Pending', 'Low', ?) RETURNING id",
+            (title, description, category, issue_type, location, session['user_id'])
         )
         complaint_id = getattr(cursor, '_lastrowid', None) or cursor.fetchone()[0]
         # Add creator as an affected user with role_in_complaint='creator'
@@ -773,10 +892,11 @@ def create_new_complaint():
         return redirect(url_for('submit_complaint'))
 
     db = get_db()
+    issue_type = pending.get('issue_type', '')
     cursor = db_execute(db,
-        "INSERT INTO complaints (title, description, category, location, status, priority, created_by) "
-        "VALUES (?, ?, ?, ?, 'Pending', 'Low', ?) RETURNING id",
-        (pending['title'], pending['description'], pending['category'], pending['location'], session['user_id'])
+        "INSERT INTO complaints (title, description, category, issue_type, location, status, priority, created_by) "
+        "VALUES (?, ?, ?, ?, ?, 'Pending', 'Low', ?) RETURNING id",
+        (pending['title'], pending['description'], pending['category'], issue_type, pending['location'], session['user_id'])
     )
     complaint_id = getattr(cursor, '_lastrowid', None) or cursor.fetchone()[0]
     # Add creator as an affected user with role_in_complaint='creator'

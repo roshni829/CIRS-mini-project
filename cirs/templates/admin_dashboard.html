@@ -51,44 +51,48 @@
             {% endwith %}
 
             <!-- Suggested Linked Issues -->
-            {% if suggested_deps %}
             <div class="card">
                 <div class="card-header">
                     Suggested Linked Issues
                     <span class="count-label">{{ suggested_deps|length }} pending</span>
                 </div>
                 <div class="card-body">
-                    {% for dep in suggested_deps %}
-                    <div class="dependency-item">
-                        <div class="dep-relation">
-                            <span class="dep-child">{{ dep.complaint_title }}</span>
-                            <span class="dep-arrow">may depend on</span>
-                            <span class="dep-parent">{{ dep.parent_title }}</span>
+                    {% if suggested_deps %}
+                        {% for dep in suggested_deps %}
+                        <div class="dependency-item">
+                            <div class="dep-relation">
+                                <span class="dep-child">{{ dep.complaint_title }}</span>
+                                <span class="dep-arrow">may depend on</span>
+                                <span class="dep-parent">{{ dep.parent_title }}</span>
+                            </div>
+                            <div class="dep-reason">Reason: {{ dep.reason }}</div>
+                            <div class="dep-confidence" style="margin:6px 0;">
+                                Confidence:
+                                <span class="badge
+                                    {% if dep.confidence == 'High' %}badge-danger
+                                    {% else %}badge-warning{% endif %}">
+                                    {{ dep.confidence }}
+                                </span>
+                            </div>
+                            <div class="dep-actions">
+                                <form method="POST" action="{{ url_for('confirm_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-success btn-sm">Confirm</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('ignore_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm">Ignore</button>
+                                </form>
+                            </div>
                         </div>
-                        <div class="dep-reason">Reason: {{ dep.reason }}</div>
-                        <div class="dep-confidence" style="margin:6px 0;">
-                            Confidence:
-                            <span class="badge
-                                {% if dep.confidence == 'High' %}badge-danger
-                                {% else %}badge-warning{% endif %}">
-                                {{ dep.confidence }}
-                            </span>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <p>No dependency suggestions found.</p>
                         </div>
-                        <div class="dep-actions">
-                            <form method="POST" action="{{ url_for('confirm_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-success btn-sm">Confirm</button>
-                            </form>
-                            <form method="POST" action="{{ url_for('ignore_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-sm">Ignore</button>
-                            </form>
-                        </div>
-                    </div>
-                    {% endfor %}
+                    {% endif %}
                 </div>
             </div>
-            {% endif %}
 
             <!-- Filter bar -->
             <div class="filter-bar">
