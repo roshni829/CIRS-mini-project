@@ -111,6 +111,7 @@ This document describes all the demo data seeded automatically when the applicat
 | Priority         | Medium                        |
 | Created By       | Student Three                 |
 | Joined By        | Student One, Student Two, Admin User |
+| Dependency       | Depends on C2 (suggested)     |
 
 ---
 
@@ -119,18 +120,22 @@ This document describes all the demo data seeded automatically when the applicat
 ```
 C1 (Wi-Fi not working)       ──[confirmed]──► C2 (Electricity failure)
 C3 (Water motor not working) ──[suggested]──► C2 (Electricity failure)
+C6 (Slow internet, Comp Lab) ──[suggested]──► C2 (Electricity failure)
 ```
 
 - **Confirmed dependency**: Resolving C2 automatically resolves C1.
-- **Suggested dependency**: Admin can confirm or ignore the C3 → C2 link from the dashboard.
+- **Suggested dependencies**: Admin can confirm or ignore the C3 → C2 and C6 → C2 links from the dashboard.
+- C6 → C2 is Medium confidence because the locations differ (Computer Lab vs Hostel Block A).
 
 ### Auto-resolve behaviour
 
-| Action                    | Effect                                      |
-|---------------------------|---------------------------------------------|
-| Admin resolves C2         | C1 is automatically set to Resolved         |
-| Admin confirms C3 → C2, then resolves C2 | C1 and C3 are both auto-resolved |
-| Admin ignores C3 → C2     | C3 is unaffected when C2 is resolved        |
+| Action                                        | Effect                                          |
+|-----------------------------------------------|-------------------------------------------------|
+| Admin resolves C2                             | C1 is automatically set to Resolved             |
+| Admin confirms C3 → C2, then resolves C2      | C1 and C3 are both auto-resolved                |
+| Admin confirms C6 → C2, then resolves C2      | C1 and C6 are both auto-resolved                |
+| Admin ignores C3 → C2                         | C3 is unaffected when C2 is resolved            |
+| Admin ignores C6 → C2                         | C6 is unaffected when C2 is resolved            |
 
 ---
 

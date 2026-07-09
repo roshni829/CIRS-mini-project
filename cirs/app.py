@@ -430,6 +430,13 @@ def seed_demo_data():
         "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
         (c1, a1, 'Admin User confirmed dependency with Electricity failure in Hostel Block A'))
 
+    # Dep 3: C6 (Slow internet in Computer Lab) → C2 (Electricity) — SUGGESTED
+    # Network equipment in the lab may rely on the same power infrastructure
+    db_execute(db,
+        "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status, confidence) "
+        "VALUES (?, ?, ?, 'suggested', ?)",
+        (c6, c2, 'Network equipment in the lab may rely on the same power infrastructure. Location differs — admin should verify.', 'Medium'))
+
     db.commit()
 
 
@@ -584,6 +591,19 @@ def seed_demo_dependency():
         db_execute(db,
             "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
             (c1, a1, 'Admin User confirmed dependency with Electricity failure in Hostel Block A'))
+        db.commit()
+
+    # ── Ensure the suggested dependency (C6 → C2, SUGGESTED) ───────────────
+    existing_c6_c2 = db_execute(db,
+        "SELECT id FROM complaint_dependencies WHERE complaint_id = ? AND depends_on_complaint_id = ?",
+        (c6, c2)
+    ).fetchone()
+
+    if not existing_c6_c2:
+        db_execute(db,
+            "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status, confidence) "
+            "VALUES (?, ?, ?, 'suggested', ?)",
+            (c6, c2, 'Network equipment in the lab may rely on the same power infrastructure. Location differs — admin should verify.', 'Medium'))
         db.commit()
 
 
