@@ -226,10 +226,10 @@ def seed_demo_data():
             (name, email, password, role)
         )
 
-    # Always ensure admin password is fresh/correct (fixes corrupted hashes)
+    # Always ensure admin user has correct role and password (fixes login issues)
     db_execute(db,
-        "UPDATE users SET password = ? WHERE email = ?",
-        (generate_password_hash('admin123'), 'admin@cirs.com')
+        "UPDATE users SET name = ?, password = ?, role = ? WHERE email = ?",
+        ('Admin User', generate_password_hash('admin123'), 'admin', 'admin@cirs.com')
     )
     db.commit()
 
