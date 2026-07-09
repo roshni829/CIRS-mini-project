@@ -138,7 +138,33 @@ def init_db():
 
 def seed_demo_data():
     db = get_db()
-    existing = db_execute(db, "SELECT COUNT(*) AS cnt FROM users").fetchone()['cnt']
+
+    # ── Always ensure demo users exist (idempotent via ON CONFLICT) ───────
+    demo_users = [
+        ('Student One', 'student1@cirs.com', generate_password_hash('student123'), 'user'),
+        ('Student Two', 'student2@cirs.com', generate_password_hash('student123'), 'user'),
+        ('Student Three', 'student3@cirs.com', generate_password_hash('student123'), 'user'),
+        ('Admin User', 'admin@cirs.com', generate_password_hash('admin123'), 'admin'),
+    ]
+    for name, email, password, role in demo_users:
+        db_execute(db,
+            "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (email) DO NOTHING",
+            (name, email, password, role)
+        )
+    db.commit()
+
+    # Fetch user IDs (whether just inserted or pre-existing)
+    def _user_id(email):
+        return db_execute(db, "SELECT id FROM users WHERE email = ?", (email,)).fetchone()['id']
+
+    s1 = _user_id('student1@cirs.com')
+    s2 = _user_id('student2@cirs.com')
+    s3 = _user_id('student3@cirs.com')
+    a1 = _user_id('admin@cirs.com')
+
+    # Only seed complaint demo data if complaints table is empty
+    existing = db_execute(db, "SELECT COUNT(*) AS cnt FROM complaints").fetchone()['cnt']
     if existing > 0:
         return
 
@@ -146,17 +172,6 @@ def seed_demo_data():
         """Insert a row and return the generated ID."""
         cur = db_execute(db, sql + " RETURNING id", params)
         return getattr(cur, '_lastrowid', None) or cur.fetchone()[0]
-
-    # ── Create 4 users ────────────────────────────────────────────────────
-    s1 = _insert("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-                  ('Student One', 'student1@cirs.com', generate_password_hash('student123'), 'user'))
-    s2 = _insert("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-                  ('Student Two', 'student2@cirs.com', generate_password_hash('student123'), 'user'))
-    s3 = _insert("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-                  ('Student Three', 'student3@cirs.com', generate_password_hash('student123'), 'user'))
-    a1 = _insert("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
-                  ('Admin User', 'admin@cirs.com', generate_password_hash('admin123'), 'admin'))
-    db.commit()
 
     # ── Create 6 complaints ───────────────────────────────────────────────
 
