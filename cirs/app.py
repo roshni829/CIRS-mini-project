@@ -172,23 +172,29 @@ def init_db():
     for sql in statements:
         db_execute(db, sql)
 
+    def _run_migration(sql, params=None):
+        """Run a single migration statement in its own savepoint so a failure
+        doesn't abort the whole transaction (PostgreSQL behaviour)."""
+        try:
+            db_execute(db, "SAVEPOINT migration_sp")
+            if params:
+                db_execute(db, sql, params)
+            else:
+                db_execute(db, sql)
+            db_execute(db, "RELEASE SAVEPOINT migration_sp")
+        except Exception:
+            db_execute(db, "ROLLBACK TO SAVEPOINT migration_sp")
+
     # Migration: add resolution_notes column if missing
-    try:
-        db_execute(db, "ALTER TABLE complaints ADD COLUMN resolution_notes TEXT DEFAULT ''")
-    except Exception:
-        pass
+    _run_migration("ALTER TABLE complaints ADD COLUMN resolution_notes TEXT DEFAULT ''")
 
     # Migration: add confidence column to complaint_dependencies
-    try:
-        db_execute(db, "ALTER TABLE complaint_dependencies ADD COLUMN confidence TEXT DEFAULT 'Medium'")
-    except Exception:
-        pass
+    _run_migration("ALTER TABLE complaint_dependencies ADD COLUMN confidence TEXT DEFAULT 'Medium'")
 
     # Migration: add issue_type column to complaints
-    try:
-        db_execute(db, "ALTER TABLE complaints ADD COLUMN issue_type TEXT DEFAULT ''")
-    except Exception:
-        pass
+    _run_migration("ALTER TABLE complaints ADD COLUMN issue_type TEXT DEFAULT ''")
+
+    db.commit()
 
     # Migration: infer issue_type for existing complaints where it's empty
     try:
@@ -198,11 +204,11 @@ def init_db():
         for row in rows:
             inferred = _infer_issue_type(row['category'], row['title'], row['description'])
             if inferred:
-                db_execute(db, "UPDATE complaints SET issue_type = ? WHERE id = ?", (inferred, row['id']))
+                db_execute(db, "UPDATE complaints SET issue_type = %s WHERE id = %s", (inferred, row['id']))
         if rows:
             db.commit()
     except Exception:
-        pass
+        db.rollback()
 
     db.commit()
 
