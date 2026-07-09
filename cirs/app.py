@@ -522,6 +522,9 @@ def seed_demo_dependency():
             "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status, confidence) "
             "VALUES (?, ?, ?, 'confirmed', ?)",
             (c1, c2, 'Router or network equipment may require electricity.', 'High'))
+        db_execute(db,
+            "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+            (c1, a1, 'Admin User confirmed dependency with Electricity failure in Hostel Block A'))
         db.commit()
 
 
