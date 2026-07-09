@@ -475,27 +475,27 @@ def seed_demo_dependency():
 
     # ── Set correct statuses and priorities ────────────────────────────────
     # C1: In Progress, Medium (3 joined)
-    db_execute(db, "UPDATE complaints SET status = 'In Progress', priority = 'Medium' WHERE id = ? AND status = 'Pending'", (c1,))
-    db_execute(db,
-        "INSERT INTO complaint_history (complaint_id, user_id, action) "
-        "SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM complaints WHERE id = ? AND status = 'In Progress')",
-        (c1, a1, 'Admin User changed status to In Progress', c1))
-    # C4: In Progress, Low
-    db_execute(db, "UPDATE complaints SET status = 'In Progress' WHERE id = ? AND status = 'Pending'", (c4,))
-    db_execute(db,
-        "INSERT INTO complaint_history (complaint_id, user_id, action) "
-        "SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM complaints WHERE id = ? AND status = 'In Progress')",
-        (c4, a1, 'Admin User changed status to In Progress', c4))
+    cur = db_execute(db, "UPDATE complaints SET status = 'In Progress', priority = 'Medium' WHERE id = ? AND status = 'Pending'", (c1,))
+    if cur.rowcount:
+        db_execute(db,
+            "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+            (c1, a1, 'Admin User changed status to In Progress'))
+    # C4: In Progress
+    cur = db_execute(db, "UPDATE complaints SET status = 'In Progress' WHERE id = ? AND status = 'Pending'", (c4,))
+    if cur.rowcount:
+        db_execute(db,
+            "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+            (c4, a1, 'Admin User changed status to In Progress'))
     # C5: Resolved with notes
-    db_execute(db,
+    cur = db_execute(db,
         "UPDATE complaints SET status = 'Resolved', resolution_notes = ?, priority = 'Low' WHERE id = ? AND status = 'Pending'",
         ('Replaced the projector bulb. Working normally now.', c5))
-    db_execute(db,
-        "INSERT INTO complaint_history (complaint_id, user_id, action) "
-        "SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM complaints WHERE id = ? AND status = 'Resolved')",
-        (c5, a1, 'Admin User resolved issue: Replaced the projector bulb. Working normally now.', c5))
+    if cur.rowcount:
+        db_execute(db,
+            "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+            (c5, a1, 'Admin User resolved issue: Replaced the projector bulb. Working normally now.'))
     # C6: Medium priority (4 joined)
-    db_execute(db, "UPDATE complaints SET priority = 'Medium' WHERE id = ? AND priority = 'Low'", (c6,))
+    cur = db_execute(db, "UPDATE complaints SET priority = 'Medium' WHERE id = ? AND priority = 'Low'", (c6,))
     db.commit()
 
     # ── Ensure the key demo dependency (C3 → C2, SUGGESTED) ───────────────
