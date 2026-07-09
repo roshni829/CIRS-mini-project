@@ -1393,23 +1393,30 @@ def update_status(complaint_id):
         (complaint_id, session['user_id'], action)
     )
 
-    # Check if resolving a parent complaint with linked children
+    # If resolving a parent complaint, auto-resolve all confirmed dependents
     if new_status == 'Resolved':
         linked_children = db_execute(db,
-            "SELECT cd.*, c.title AS child_title FROM complaint_dependencies cd "
+            "SELECT cd.complaint_id, c.title AS child_title "
+            "FROM complaint_dependencies cd "
             "JOIN complaints c ON cd.complaint_id = c.id "
-            "WHERE cd.depends_on_complaint_id = ? AND cd.status = 'confirmed'",
+            "WHERE cd.depends_on_complaint_id = %s AND cd.status = 'confirmed' "
+            "AND c.status != 'Resolved'",
             (complaint_id,)
         ).fetchall()
         if linked_children:
-            msgs = []
             for child in linked_children:
-                msgs.append(child['child_title'])
-            db_execute(db,
-                "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
-                (complaint_id, session['user_id'], 'Parent issue resolved. Linked issues need review.')
-            )
-            flash('Linked issue needs review: ' + ', '.join(msgs), 'warning')
+                db_execute(db,
+                    "UPDATE complaints SET status = 'Resolved', updated_at = CURRENT_TIMESTAMP "
+                    "WHERE id = %s",
+                    (child['complaint_id'],)
+                )
+                db_execute(db,
+                    "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (%s, %s, %s)",
+                    (child['complaint_id'], session['user_id'],
+                     f"Auto-resolved: parent issue #{complaint_id} was resolved")
+                )
+            child_titles = ', '.join(c['child_title'] for c in linked_children)
+            flash(f'Auto-resolved {len(linked_children)} dependent issue(s): {child_titles}', 'info')
 
     db.commit()
     flash('Status updated.', 'success')
