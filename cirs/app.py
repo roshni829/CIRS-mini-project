@@ -419,12 +419,16 @@ def seed_demo_dependency():
     s2 = s2_row['id']
     s3 = s3_row['id']
 
-    # Helper: ensure a complaint_user record exists
+    # Helper: ensure a complaint_user record exists with history
     def _ensure_joined(cid, uid, role, uname):
-        db_execute(db,
+        cur = db_execute(db,
             "INSERT INTO complaint_users (complaint_id, user_id, role_in_complaint) VALUES (?, ?, ?) "
             "ON CONFLICT DO NOTHING",
             (cid, uid, role))
+        if cur.rowcount and cur.rowcount > 0:
+            db_execute(db,
+                "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+                (cid, uid, uname + ' joined complaint'))
 
     # ── Ensure all 6 demo complaints exist ────────────────────────────────
 
@@ -472,12 +476,24 @@ def seed_demo_dependency():
     # ── Set correct statuses and priorities ────────────────────────────────
     # C1: In Progress, Medium (3 joined)
     db_execute(db, "UPDATE complaints SET status = 'In Progress', priority = 'Medium' WHERE id = ? AND status = 'Pending'", (c1,))
+    db_execute(db,
+        "INSERT INTO complaint_history (complaint_id, user_id, action) "
+        "SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM complaints WHERE id = ? AND status = 'In Progress')",
+        (c1, a1, 'Admin User changed status to In Progress', c1))
     # C4: In Progress, Low
     db_execute(db, "UPDATE complaints SET status = 'In Progress' WHERE id = ? AND status = 'Pending'", (c4,))
+    db_execute(db,
+        "INSERT INTO complaint_history (complaint_id, user_id, action) "
+        "SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM complaints WHERE id = ? AND status = 'In Progress')",
+        (c4, a1, 'Admin User changed status to In Progress', c4))
     # C5: Resolved with notes
     db_execute(db,
         "UPDATE complaints SET status = 'Resolved', resolution_notes = ?, priority = 'Low' WHERE id = ? AND status = 'Pending'",
         ('Replaced the projector bulb. Working normally now.', c5))
+    db_execute(db,
+        "INSERT INTO complaint_history (complaint_id, user_id, action) "
+        "SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM complaints WHERE id = ? AND status = 'Resolved')",
+        (c5, a1, 'Admin User resolved issue: Replaced the projector bulb. Working normally now.', c5))
     # C6: Medium priority (4 joined)
     db_execute(db, "UPDATE complaints SET priority = 'Medium' WHERE id = ? AND priority = 'Low'", (c6,))
     db.commit()
