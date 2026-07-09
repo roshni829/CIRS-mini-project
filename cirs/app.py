@@ -403,21 +403,36 @@ def _ensure_demo_complaint(db, title, desc, cat, itype, loc, creator_id, creator
 
 
 def seed_demo_dependency():
-    """Always ensure the demo dependency example exists in the database."""
+    """Always ensure ALL demo complaints and the key dependency exist."""
     db = get_db()
 
-    # Get admin user id
+    # Get user ids
     admin = db_execute(db, "SELECT id FROM users WHERE email = ?", ('admin@cirs.com',)).fetchone()
-    student1 = db_execute(db, "SELECT id FROM users WHERE email = ?", ('student1@cirs.com',)).fetchone()
-    student2 = db_execute(db, "SELECT id FROM users WHERE email = ?", ('student2@cirs.com',)).fetchone()
-    if not admin or not student1 or not student2:
+    s1_row = db_execute(db, "SELECT id FROM users WHERE email = ?", ('student1@cirs.com',)).fetchone()
+    s2_row = db_execute(db, "SELECT id FROM users WHERE email = ?", ('student2@cirs.com',)).fetchone()
+    s3_row = db_execute(db, "SELECT id FROM users WHERE email = ?", ('student3@cirs.com',)).fetchone()
+    if not admin or not s1_row or not s2_row or not s3_row:
         return  # Users not seeded yet
 
     a1 = admin['id']
-    s1 = student1['id']
-    s2 = student2['id']
+    s1 = s1_row['id']
+    s2 = s2_row['id']
+    s3 = s3_row['id']
 
-    # Ensure demo complaints exist
+    # Helper: ensure a complaint_user record exists
+    def _ensure_joined(cid, uid, role, uname):
+        db_execute(db,
+            "INSERT INTO complaint_users (complaint_id, user_id, role_in_complaint) VALUES (?, ?, ?) "
+            "ON CONFLICT DO NOTHING",
+            (cid, uid, role))
+
+    # ── Ensure all 6 demo complaints exist ────────────────────────────────
+
+    c1 = _ensure_demo_complaint(db,
+        'Wi-Fi not working in Hostel Block A',
+        'The Wi-Fi network has been down since yesterday. Students are unable to access the internet for online classes.',
+        'Wi-Fi', 'No Network', 'Hostel Block A', s1, 'Student One')
+
     c2 = _ensure_demo_complaint(db,
         'Electricity failure in Hostel Block A',
         'Power supply is unavailable in Hostel Block A. Lights and fans are not working.',
@@ -428,9 +443,46 @@ def seed_demo_dependency():
         'Motor is not running and water is not coming to the overhead tank.',
         'Water', 'Motor/Pump Not Working', 'Hostel Block A', s2, 'Student Two')
 
+    c4 = _ensure_demo_complaint(db,
+        'Water leakage near bathroom',
+        'The tap in the ground floor boys washroom is continuously leaking. Water is being wasted.',
+        'Water', 'Pipe Leakage', 'Academic Block', s3, 'Student Three')
+
+    c5 = _ensure_demo_complaint(db,
+        'Projector bulb fuse in Room 201',
+        'The projector bulb in classroom 201 has fused. Unable to conduct presentations.',
+        'Classroom', 'Other', 'Room 201', s2, 'Student Two')
+
+    c6 = _ensure_demo_complaint(db,
+        'Slow internet in Computer Lab',
+        'The internet speed in the computer lab is extremely slow. Unable to load websites and access lab resources.',
+        'Wi-Fi', 'Slow Internet', 'Computer Lab', s3, 'Student Three')
+
     db.commit()
 
-    # Ensure dependency row exists (child → parent)
+    # ── Ensure join records ───────────────────────────────────────────────
+    _ensure_joined(c1, s2, 'joined', 'Student Two')
+    _ensure_joined(c1, s3, 'joined', 'Student Three')
+    _ensure_joined(c4, s1, 'joined', 'Student One')
+    _ensure_joined(c6, s1, 'joined', 'Student One')
+    _ensure_joined(c6, s2, 'joined', 'Student Two')
+    _ensure_joined(c6, a1, 'joined', 'Admin User')
+    db.commit()
+
+    # ── Set correct statuses and priorities ────────────────────────────────
+    # C1: In Progress, Medium (3 joined)
+    db_execute(db, "UPDATE complaints SET status = 'In Progress', priority = 'Medium' WHERE id = ? AND status = 'Pending'", (c1,))
+    # C4: In Progress, Low
+    db_execute(db, "UPDATE complaints SET status = 'In Progress' WHERE id = ? AND status = 'Pending'", (c4,))
+    # C5: Resolved with notes
+    db_execute(db,
+        "UPDATE complaints SET status = 'Resolved', resolution_notes = ?, priority = 'Low' WHERE id = ? AND status = 'Pending'",
+        ('Replaced the projector bulb. Working normally now.', c5))
+    # C6: Medium priority (4 joined)
+    db_execute(db, "UPDATE complaints SET priority = 'Medium' WHERE id = ? AND priority = 'Low'", (c6,))
+    db.commit()
+
+    # ── Ensure the key demo dependency (C3 → C2, SUGGESTED) ───────────────
     existing_dep = db_execute(db,
         "SELECT id FROM complaint_dependencies WHERE complaint_id = ? AND depends_on_complaint_id = ?",
         (c3, c2)
@@ -441,6 +493,19 @@ def seed_demo_dependency():
             "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status, confidence) "
             "VALUES (?, ?, ?, 'suggested', ?)",
             (c3, c2, 'Water supply may require motor or pump, and motor requires electricity.', 'High'))
+        db.commit()
+
+    # ── Ensure the confirmed dependency (C1 → C2, CONFIRMED) ───────────────
+    existing_confirmed = db_execute(db,
+        "SELECT id FROM complaint_dependencies WHERE complaint_id = ? AND depends_on_complaint_id = ?",
+        (c1, c2)
+    ).fetchone()
+
+    if not existing_confirmed:
+        db_execute(db,
+            "INSERT INTO complaint_dependencies (complaint_id, depends_on_complaint_id, reason, status, confidence) "
+            "VALUES (?, ?, ?, 'confirmed', ?)",
+            (c1, c2, 'Router or network equipment may require electricity.', 'High'))
         db.commit()
 
 
