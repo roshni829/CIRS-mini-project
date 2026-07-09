@@ -83,8 +83,8 @@
                                         {% else %}badge-secondary{% endif %}">
                                         {{ complaint.priority }}
                                     </span>
-                                    <span>Expected Resolution: {{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
-                                    <span>Created: {{ complaint.created_at | format_datetime }}</span>
+                                    <span>Expected Resolution: {{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
+                                    <span>Last Updated: {{ complaint.updated_at | format_datetime }}</span>
                                 </div>
                                 {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
                                 <div class="resolution-note">Resolution: {{ complaint.resolution_notes }}</div>
@@ -140,7 +140,7 @@
                                         {% else %}badge-secondary{% endif %}">
                                         {{ complaint.priority }}
                                     </span>
-                                    <span>Expected Resolution: {{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
+                                    <span>Expected Resolution: {{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
                                     <span>Joined: {{ complaint.joined_on | format_datetime }}</span>
                                 </div>
                                 {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
@@ -196,7 +196,7 @@
                                         {% else %}badge-secondary{% endif %}">
                                         {{ complaint.priority }}
                                     </span>
-                                    <span>Expected Resolution: {{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
+                                    <span>Expected Resolution: {{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
                                     <span>by {{ complaint.creator_name }}</span>
                                 </div>
                                 <div class="actions">

@@ -1293,12 +1293,118 @@ table .meta {
     margin-top: 2px;
 }
 
-/* ─── Resolution Time ─────────────────────────────────────────────────────── */
+/* ─── Dynamic Resolution Time ────────────────────────────────────────────── */
 
 .resolution-time {
     font-weight: 600;
     color: #2563eb;
     font-size: 13px;
+}
+
+.resolution-time.completed {
+    color: #16a34a;
+}
+
+.sla-label {
+    font-size: 11px;
+    color: #9ca3af;
+    display: block;
+    margin-top: 2px;
+}
+
+.progress-info {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    padding: 10px 14px;
+    background: #f9fafb;
+    border-radius: 8px;
+    border: 1px solid #f3f4f6;
+}
+
+.progress-info .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.progress-info .stat-label {
+    font-size: 10px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.progress-info .stat-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+/* ─── Vertical Timeline ──────────────────────────────────────────────────── */
+
+.timeline {
+    position: relative;
+    padding-left: 28px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 10px;
+    bottom: 4px;
+    width: 2px;
+    background: #e5e7eb;
+    border-radius: 1px;
+}
+
+.timeline-item {
+    position: relative;
+    padding-bottom: 22px;
+}
+
+.timeline-item:last-child {
+    padding-bottom: 0;
+}
+
+.timeline-item:last-child::before {
+    display: none;
+}
+
+.timeline-bullet {
+    position: absolute;
+    left: -22px;
+    top: 5px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #2563eb;
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 2px #2563eb;
+    z-index: 1;
+    transition: all 0.15s ease;
+}
+
+.timeline-item:hover .timeline-bullet {
+    transform: scale(1.15);
+}
+
+.timeline-content {
+    font-size: 13px;
+}
+
+.timeline-date {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-bottom: 2px;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.timeline-event {
+    font-weight: 500;
+    color: #1f2937;
 }
 
 /* ─── Resolution Note ─────────────────────────────────────────────────────── */

@@ -99,7 +99,41 @@
                                 {% endif %}
                                 <div>
                                     <span class="label">Expected Resolution</span>
-                                    <span class="value" style="font-size:14px;font-weight:600;color:#2563eb;">{{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
+                                    {% set dynamic_time = get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) %}
+                                    <span class="resolution-time {% if complaint.status == 'Resolved' %}completed{% endif %}">{{ dynamic_time }}</span>
+                                    {% if complaint.status != 'Resolved' %}
+                                    <span class="sla-label">Original SLA: {{ get_sla_time(complaint.category, complaint.priority) }}</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Current Progress info -->
+                            <div class="progress-info">
+                                <div class="stat">
+                                    <span class="stat-label">Current Progress</span>
+                                    <span class="stat-value">
+                                        <span class="badge
+                                            {% if complaint.status == 'Pending' %}badge-warning
+                                            {% elif complaint.status == 'In Progress' %}badge-info
+                                            {% else %}badge-success{% endif %}">
+                                            {{ complaint.status }}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div class="stat">
+                                    <span class="stat-label">Priority</span>
+                                    <span class="stat-value">
+                                        <span class="badge
+                                            {% if complaint.priority == 'High' %}badge-danger
+                                            {% elif complaint.priority == 'Medium' %}badge-warning
+                                            {% else %}badge-secondary{% endif %}">
+                                            {{ complaint.priority }}
+                                        </span>
+                                    </span>
+                                </div>
+                                <div class="stat">
+                                    <span class="stat-label">Last Updated</span>
+                                    <span class="stat-value" style="font-size:12px;font-weight:400;color:#6b7280;">{{ complaint.updated_at | format_datetime }}</span>
                                 </div>
                             </div>
 
@@ -227,14 +261,40 @@
 
                     {% if history %}
                     <div class="card">
-                        <div class="card-header">Activity</div>
+                        <div class="card-header">Timeline</div>
                         <div class="card-body">
-                            {% for entry in history %}
-                            <div class="activity-item">
-                                <span class="time">{{ entry.created_at | format_time }}</span>
-                                <span class="action">{{ entry.action }}</span>
+                            <div class="timeline">
+                                {% for entry in history %}
+                                {% set event_name = entry.action | timeline_event %}
+                                {% set event_color = event_name | timeline_color %}
+                                <div class="timeline-item">
+                                    <div class="timeline-bullet" style="background:{{ event_color }};box-shadow:0 0 0 2px {{ event_color }};"></div>
+                                    <div class="timeline-content">
+                                        <div class="timeline-date">{{ entry.created_at | format_date }} • {{ entry.created_at | format_time }}</div>
+                                        <div class="timeline-event">
+                                            {{ event_name }}
+                                            {% if 'changed status to' in entry.action.lower() %}
+                                            <span class="badge
+                                                {%- if 'pending' in entry.action.lower() %}badge-warning
+                                                {%- elif 'in progress' in entry.action.lower() %}badge-info
+                                                {%- elif 'resolved' in entry.action.lower() %}badge-success
+                                                {%- endif %}" style="margin-left:6px;">
+                                                {%- if 'pending' in entry.action.lower() %}Pending
+                                                {%- elif 'in progress' in entry.action.lower() %}In Progress
+                                                {%- elif 'resolved' in entry.action.lower() %}Resolved
+                                                {%- endif -%}
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                        {% if 'resolved issue' in entry.action.lower() %}
+                                        <div style="font-size:12px;color:#6b7280;margin-top:2px;">
+                                            {{ entry.action.split(':')[1] if ':' in entry.action else '' }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
                             </div>
-                            {% endfor %}
                         </div>
                     </div>
                     {% endif %}

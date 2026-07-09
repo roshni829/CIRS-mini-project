@@ -605,6 +605,85 @@ def get_expected_resolution_time(category, priority):
     return mapping.get(category, {}).get(priority, 'N/A')
 
 
+def get_dynamic_expected_time(category, priority, status):
+    """Return dynamic expected resolution time that changes based on status.
+    
+    Pending      → Show original SLA (e.g., 6 Hours Remaining)
+    In Progress  → Show reduced time (e.g., 3 Hours Remaining)
+    Resolved     → Completed (0 Hours)
+    """
+    if status == 'Resolved':
+        return 'Completed (0 Hours)'
+
+    # Base hours per category and priority
+    mapping = {
+        'Electricity': {'High': 1, 'Medium': 3, 'Low': 6},
+        'Water': {'High': 2, 'Medium': 4, 'Low': 8},
+        'Wi-Fi': {'High': 3, 'Medium': 6, 'Low': 12},
+        'Cleanliness': {'High': 6, 'Medium': 12, 'Low': 24},
+        'Classroom': {'High': 2, 'Medium': 6, 'Low': 12},
+        'Hostel': {'High': 4, 'Medium': 8, 'Low': 24},
+        'Other': {'High': 6, 'Medium': 12, 'Low': 24},
+    }
+    base_hours = mapping.get(category, {}).get(priority, 6)
+
+    if status == 'In Progress':
+        remaining = max(1, base_hours // 2)
+        return f'{remaining} Hours Remaining'
+
+    # Pending or default
+    return f'{base_hours} Hours Remaining'
+
+
+def get_sla_time(category, priority):
+    """Return original SLA time text."""
+    return get_expected_resolution_time(category, priority)
+
+
+def timeline_event_name(action):
+    """Map raw history action text to a cleaner timeline event name."""
+    lower = action.lower()
+    if 'created' in lower:
+        return 'Complaint Raised'
+    if 'joined' in lower:
+        return 'Student Joined'
+    if 'confirmed dependency' in lower:
+        return 'Dependency Confirmed'
+    if 'ignored dependency' in lower:
+        return 'Dependency Ignored'
+    if 'resolved issue' in lower or lower.startswith('resolved'):
+        return 'Issue Resolved'
+    if 'changed status to' in lower:
+        if 'in progress' in lower:
+            return 'Status: In Progress'
+        if 'pending' in lower:
+            return 'Status: Pending'
+        if 'resolved' in lower:
+            return 'Status: Resolved'
+        return 'Status Updated'
+    if 'linked issues need review' in lower:
+        return 'Linked Issues Notice'
+    return action
+
+
+def timeline_event_color(event_name):
+    """Return a hex color for a timeline event based on its type."""
+    colors = {
+        'Complaint Raised': '#2563eb',
+        'Student Joined': '#3b82f6',
+        'Dependency Suggested': '#f59e0b',
+        'Dependency Confirmed': '#16a34a',
+        'Dependency Ignored': '#6b7280',
+        'Issue Resolved': '#16a34a',
+        'Status: Pending': '#f59e0b',
+        'Status: In Progress': '#3b82f6',
+        'Status: Resolved': '#16a34a',
+        'Status Updated': '#6b7280',
+        'Linked Issues Notice': '#dc2626',
+    }
+    return colors.get(event_name, '#9ca3af')
+
+
 def update_priority(complaint_id):
     db = get_db()
     count = db_execute(db,
@@ -807,17 +886,31 @@ def format_datetime(value, fmt='%d %b %Y, %I:%M %p'):
     return value.strftime(fmt)
 
 
+def format_date(value, fmt='%d %b %Y'):
+    """Format a date-only display from a datetime."""
+    if value is None:
+        return '-'
+    return value.strftime(fmt)
+
+
 def format_time(value, fmt='%I:%M %p'):
     """Format a time-only datetime value. Handles both datetime objects and strings."""
     return format_datetime(value, fmt)
 
 
 app.jinja_env.filters['format_datetime'] = format_datetime
+app.jinja_env.filters['format_date'] = format_date
 app.jinja_env.filters['format_time'] = format_time
 
 # ─── Make helpers available in templates ────────────────────────────────────────
 
-app.jinja_env.globals.update(get_expected_resolution_time=get_expected_resolution_time)
+app.jinja_env.globals.update(
+    get_expected_resolution_time=get_expected_resolution_time,
+    get_dynamic_expected_time=get_dynamic_expected_time,
+    get_sla_time=get_sla_time,
+)
+app.jinja_env.filters['timeline_event'] = timeline_event_name
+app.jinja_env.filters['timeline_color'] = timeline_event_color
 
 
 # ─── Auth helpers ───────────────────────────────────────────────────────────────

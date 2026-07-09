@@ -165,7 +165,7 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="resolution-time">{{ get_expected_resolution_time(complaint.category, complaint.priority) }}</span>
+                                            <span class="resolution-time {% if complaint.status == 'Resolved' %}completed{% endif %}">{{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
                                         </td>
                                         <td>
                                             <span id="status-{{ complaint.id }}" class="badge
