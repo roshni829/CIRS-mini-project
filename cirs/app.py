@@ -112,10 +112,51 @@ def _infer_issue_type(category, title, description):
     return 'Other'
 
 
+# ─── SLA helpers ────────────────────────────────────────────────────────────────
+
+# Default SLA hours used when no DB override exists
+_DEFAULT_SLA = {
+    'Electricity': {'High': 1,  'Medium': 3,  'Low': 6},
+    'Water':       {'High': 2,  'Medium': 4,  'Low': 8},
+    'Wi-Fi':       {'High': 3,  'Medium': 6,  'Low': 12},
+    'Cleanliness': {'High': 6,  'Medium': 12, 'Low': 24},
+    'Classroom':   {'High': 2,  'Medium': 6,  'Low': 12},
+    'Hostel':      {'High': 4,  'Medium': 8,  'Low': 24},
+    'Other':       {'High': 6,  'Medium': 12, 'Low': 24},
+}
+
+def _seed_default_sla(db):
+    """Insert default SLA rows only if the table is completely empty."""
+    count = db_execute(db, "SELECT COUNT(*) AS cnt FROM sla_settings").fetchone()['cnt']
+    if count > 0:
+        return
+    for cat, priorities in _DEFAULT_SLA.items():
+        for prio, hrs in priorities.items():
+            db_execute(db,
+                "INSERT INTO sla_settings (category, priority, hours) VALUES (%s, %s, %s) "
+                "ON CONFLICT (category, priority) DO NOTHING",
+                (cat, prio, hrs)
+            )
+
+
+def get_sla_hours(category, priority):
+    """Return SLA hours for a category/priority from DB, falling back to defaults."""
+    try:
+        db = get_db()
+        row = db_execute(db,
+            "SELECT hours FROM sla_settings WHERE category = %s AND priority = %s",
+            (category, priority)
+        ).fetchone()
+        if row:
+            return row['hours']
+    except Exception:
+        pass
+    return _DEFAULT_SLA.get(category, {}).get(priority, 6)
+
+
 def init_db():
     db = get_db()
     statements = [
-        """CREATE TABLE IF NOT EXISTS users (
             id          SERIAL PRIMARY KEY,
             name        TEXT    NOT NULL,
             email       TEXT    UNIQUE NOT NULL,
@@ -168,6 +209,14 @@ def init_db():
             FOREIGN KEY (complaint_id) REFERENCES complaints(id),
             FOREIGN KEY (depends_on_complaint_id) REFERENCES complaints(id)
         )""",
+        """CREATE TABLE IF NOT EXISTS sla_settings (
+            id          SERIAL PRIMARY KEY,
+            category    TEXT    NOT NULL,
+            priority    TEXT    NOT NULL,
+            hours       INTEGER NOT NULL DEFAULT 6,
+            updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(category, priority)
+        )""",
     ]
     for sql in statements:
         db_execute(db, sql)
@@ -209,6 +258,9 @@ def init_db():
             db.commit()
     except Exception:
         db.rollback()
+
+    # Seed default SLA settings if table is empty
+    _seed_default_sla(db)
 
     db.commit()
 
@@ -599,39 +651,18 @@ def calculate_priority(affected_count):
 
 def get_expected_resolution_time(category, priority):
     """Return expected resolution time text based on category and priority."""
-    mapping = {
-        'Electricity': {'High': '1 hour', 'Medium': '3 hours', 'Low': '6 hours'},
-        'Water': {'High': '2 hours', 'Medium': '4 hours', 'Low': '8 hours'},
-        'Wi-Fi': {'High': '3 hours', 'Medium': '6 hours', 'Low': '12 hours'},
-        'Cleanliness': {'High': '6 hours', 'Medium': '12 hours', 'Low': '24 hours'},
-        'Classroom': {'High': '2 hours', 'Medium': '6 hours', 'Low': '12 hours'},
-        'Hostel': {'High': '4 hours', 'Medium': '8 hours', 'Low': '24 hours'},
-        'Other': {'High': '6 hours', 'Medium': '12 hours', 'Low': '24 hours'},
-    }
-    return mapping.get(category, {}).get(priority, 'N/A')
+    hours = get_sla_hours(category, priority)
+    if hours == 1:
+        return '1 hour'
+    return f'{hours} hours'
 
 
 def get_dynamic_expected_time(category, priority, status):
-    """Return dynamic expected resolution time that changes based on status.
-    
-    Pending      → Show original SLA (e.g., 6 Hours Remaining)
-    In Progress  → Show reduced time (e.g., 3 Hours Remaining)
-    Resolved     → Completed (0 Hours)
-    """
+    """Return dynamic expected resolution time that changes based on status."""
     if status == 'Resolved':
         return 'Completed (0 Hours)'
 
-    # Base hours per category and priority
-    mapping = {
-        'Electricity': {'High': 1, 'Medium': 3, 'Low': 6},
-        'Water': {'High': 2, 'Medium': 4, 'Low': 8},
-        'Wi-Fi': {'High': 3, 'Medium': 6, 'Low': 12},
-        'Cleanliness': {'High': 6, 'Medium': 12, 'Low': 24},
-        'Classroom': {'High': 2, 'Medium': 6, 'Low': 12},
-        'Hostel': {'High': 4, 'Medium': 8, 'Low': 24},
-        'Other': {'High': 6, 'Medium': 12, 'Low': 24},
-    }
-    base_hours = mapping.get(category, {}).get(priority, 6)
+    base_hours = get_sla_hours(category, priority)
 
     if status == 'In Progress':
         remaining = max(1, base_hours // 2)
@@ -1382,6 +1413,49 @@ def update_status(complaint_id):
     db.commit()
     flash('Status updated.', 'success')
     return redirect(url_for('admin_dashboard'))
+
+
+# ─── SLA Settings Route ─────────────────────────────────────────────────────────
+
+@app.route('/admin/sla', methods=['GET', 'POST'])
+@admin_required
+def sla_settings():
+    db = get_db()
+    categories = ['Electricity', 'Water', 'Wi-Fi', 'Cleanliness', 'Classroom', 'Hostel', 'Other']
+    priorities = ['High', 'Medium', 'Low']
+
+    if request.method == 'POST':
+        updated = 0
+        for cat in categories:
+            for prio in priorities:
+                field = f'hours_{cat}_{prio}'
+                val = request.form.get(field, '').strip()
+                if val.isdigit() and int(val) > 0:
+                    db_execute(db,
+                        "INSERT INTO sla_settings (category, priority, hours, updated_at) "
+                        "VALUES (%s, %s, %s, CURRENT_TIMESTAMP) "
+                        "ON CONFLICT (category, priority) DO UPDATE SET hours = EXCLUDED.hours, updated_at = CURRENT_TIMESTAMP",
+                        (cat, prio, int(val))
+                    )
+                    updated += 1
+        db.commit()
+        flash(f'SLA settings updated ({updated} entries saved).', 'success')
+        return redirect(url_for('sla_settings'))
+
+    # Load current settings into a nested dict: {category: {priority: hours}}
+    rows = db_execute(db, "SELECT category, priority, hours FROM sla_settings").fetchall()
+    current = {}
+    for row in rows:
+        current.setdefault(row['category'], {})[row['priority']] = row['hours']
+
+    # Fill defaults for any missing entries
+    for cat in categories:
+        for prio in priorities:
+            if prio not in current.get(cat, {}):
+                current.setdefault(cat, {})[prio] = _DEFAULT_SLA.get(cat, {}).get(prio, 6)
+
+    return render_template('sla_settings.html', categories=categories,
+                           priorities=priorities, current=current)
 
 
 # ─── Dependency Routes ──────────────────────────────────────────────────────────
