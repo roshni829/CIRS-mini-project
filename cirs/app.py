@@ -225,6 +225,12 @@ def seed_demo_data():
             "ON CONFLICT (email) DO NOTHING",
             (name, email, password, role)
         )
+
+    # Always ensure admin password is fresh/correct (fixes corrupted hashes)
+    db_execute(db,
+        "UPDATE users SET password = ? WHERE email = ?",
+        (generate_password_hash('admin123'), 'admin@cirs.com')
+    )
     db.commit()
 
     # Fetch user IDs (whether just inserted or pre-existing)
