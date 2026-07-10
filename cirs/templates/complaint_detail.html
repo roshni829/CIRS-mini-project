@@ -98,6 +98,7 @@
                                     <span class="badge
                                         {% if complaint.status == 'Pending' %}badge-warning
                                         {% elif complaint.status == 'In Progress' %}badge-info
+                                        {% elif complaint.status == 'Needs Review' %}badge-review
                                         {% else %}badge-success{% endif %}">
                                         {{ complaint.status }}
                                     </span>
@@ -185,6 +186,7 @@
                                         <select class="form-control" name="status" style="width:auto;">
                                             <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
                                             <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                                            <option value="Needs Review" {% if complaint.status == 'Needs Review' %}selected{% endif %}>Needs Review</option>
                                             <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
                                         </select>
                                         <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>

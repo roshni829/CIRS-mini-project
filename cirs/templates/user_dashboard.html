@@ -83,6 +83,7 @@
                                     <span id="status-{{ complaint.id }}" class="badge
                                         {% if complaint.status == 'Pending' %}badge-warning
                                         {% elif complaint.status == 'In Progress' %}badge-info
+                                        {% elif complaint.status == 'Needs Review' %}badge-review
                                         {% else %}badge-success{% endif %}">
                                         {{ complaint.status }}
                                     </span>
@@ -155,6 +156,7 @@
                                     <span id="status-{{ complaint.id }}" class="badge
                                         {% if complaint.status == 'Pending' %}badge-warning
                                         {% elif complaint.status == 'In Progress' %}badge-info
+                                        {% elif complaint.status == 'Needs Review' %}badge-review
                                         {% else %}badge-success{% endif %}">
                                         {{ complaint.status }}
                                     </span>
@@ -226,6 +228,7 @@
                                     <span id="status-{{ complaint.id }}" class="badge
                                         {% if complaint.status == 'Pending' %}badge-warning
                                         {% elif complaint.status == 'In Progress' %}badge-info
+                                        {% elif complaint.status == 'Needs Review' %}badge-review
                                         {% else %}badge-success{% endif %}">
                                         {{ complaint.status }}
                                     </span>

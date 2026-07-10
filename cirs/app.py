@@ -762,8 +762,8 @@ def timeline_event_name(action):
         return 'Work Completed'
     if 'note:' in lower:
         return 'Work Note Added'
-    if 'auto-resolved' in lower:
-        return 'Auto-Resolved (Linked Issue)'
+    if 'needs review' in lower:
+        return 'Marked for Review'
     return action
 
 
@@ -784,7 +784,7 @@ def timeline_event_color(event_name):
         'Work Started': '#f97316',
         'Work Completed': '#22c55e',
         'Work Note Added': '#a855f7',
-        'Auto-Resolved (Linked Issue)': '#6366f1',
+        'Marked for Review': '#6366f1',
     }
     return colors.get(event_name, '#9ca3af')
 
@@ -1632,12 +1632,23 @@ def complaint_detail(complaint_id):
 @admin_required
 def update_status(complaint_id):
     new_status = request.form['status']
-    if new_status not in ['Pending', 'In Progress', 'Resolved']:
+    if new_status not in ['Pending', 'In Progress', 'Resolved', 'Needs Review']:
         flash('Invalid status.', 'danger')
         return redirect(url_for('admin_dashboard'))
 
     db = get_db()
+    complaint = db_execute(db, "SELECT * FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
+    if not complaint:
+        flash('Issue not found.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
     resolution_notes = request.form.get('resolution_notes', '').strip()
+
+    # If resolving without technician completing work, require explanation
+    if new_status == 'Resolved' and complaint['technician_status'] != 'Work Completed':
+        if not resolution_notes:
+            flash('Please provide resolution notes explaining why this issue was resolved directly.', 'warning')
+            return redirect(request.referrer or url_for('admin_dashboard'))
 
     if new_status == 'Resolved' and resolution_notes:
         db_execute(db,
@@ -1660,7 +1671,7 @@ def update_status(complaint_id):
         (complaint_id, session['user_id'], action)
     )
 
-    # If resolving a parent complaint, auto-resolve all confirmed dependents
+    # If resolving a parent complaint, mark confirmed dependents as 'Needs Review'
     if new_status == 'Resolved':
         linked_children = db_execute(db,
             "SELECT cd.complaint_id, c.title AS child_title "
@@ -1673,17 +1684,17 @@ def update_status(complaint_id):
         if linked_children:
             for child in linked_children:
                 db_execute(db,
-                    "UPDATE complaints SET status = 'Resolved', updated_at = CURRENT_TIMESTAMP "
+                    "UPDATE complaints SET status = 'Needs Review', updated_at = CURRENT_TIMESTAMP "
                     "WHERE id = %s",
                     (child['complaint_id'],)
                 )
                 db_execute(db,
                     "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (%s, %s, %s)",
                     (child['complaint_id'], session['user_id'],
-                     f"Auto-resolved: parent issue #{complaint_id} was resolved")
+                     f"Parent issue #{complaint_id} was resolved — this linked issue needs review")
                 )
             child_titles = ', '.join(c['child_title'] for c in linked_children)
-            flash(f'Auto-resolved {len(linked_children)} dependent issue(s): {child_titles}', 'info')
+            flash(f'Parent issue resolved. {len(linked_children)} linked issue(s) moved to Needs Review: {child_titles}', 'info')
 
     db.commit()
     flash('Status updated.', 'success')

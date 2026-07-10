@@ -1727,6 +1727,12 @@ table .meta {
 }
 .badge-blue::before { background: #3b82f6; }
 
+.badge-review {
+    background: #f3e8ff;
+    color: #6b21a8;
+}
+.badge-review::before { background: #a855f7; }
+
 @media (max-width: 480px) {
     .auth-box {
         padding: 24px 20px 20px;
