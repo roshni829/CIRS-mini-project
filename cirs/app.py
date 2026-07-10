@@ -1007,15 +1007,46 @@ app.jinja_env.filters['format_datetime'] = format_datetime
 app.jinja_env.filters['format_date'] = format_date
 app.jinja_env.filters['format_time'] = format_time
 
+# ─── Issue ID formatter ───────────────────────────────────────────────────────
+
+def format_issue_id(complaint_id):
+    """Format complaint ID as CIRS-2026-XXX."""
+    from datetime import datetime
+    year = datetime.now().year
+    return f'CIRS-{year}-{complaint_id:03d}'
+
+
+def current_date():
+    """Return current date formatted."""
+    from datetime import datetime
+    return datetime.now().strftime('%d %b %Y')
+
+
 # ─── Make helpers available in templates ────────────────────────────────────────
 
 app.jinja_env.globals.update(
     get_expected_resolution_time=get_expected_resolution_time,
     get_dynamic_expected_time=get_dynamic_expected_time,
     get_sla_time=get_sla_time,
+    current_date=current_date,
 )
 app.jinja_env.filters['timeline_event'] = timeline_event_name
 app.jinja_env.filters['timeline_color'] = timeline_event_color
+app.jinja_env.filters['issue_id'] = format_issue_id
+
+
+def alert_class(category):
+    """Map Flask flash categories to CSS alert classes."""
+    mapping = {
+        'success': 'green',
+        'danger': 'red',
+        'warning': 'amber',
+        'info': 'blue',
+    }
+    return mapping.get(category, 'blue')
+
+
+app.jinja_env.filters['alert_class'] = alert_class
 
 
 # ─── Auth helpers ───────────────────────────────────────────────────────────────
@@ -1525,6 +1556,10 @@ def admin_dashboard():
     total_resolved = db_execute(db, "SELECT COUNT(*) AS cnt FROM complaints WHERE status = 'Resolved'").fetchone()['cnt']
     total_deps = len(suggested_deps)
 
+    # Pre-filter for Needs Attention section
+    needs_assign = [c for c in complaints if c['assigned_to'] is None]
+    needs_verify = [c for c in complaints if c['technician_status'] == 'Work Completed']
+
     # Recent activity logs (last 20 entries across all complaints)
     recent_logs = db_execute(db,
         "SELECT ch.*, u.name AS user_name, c.title AS complaint_title "
@@ -1540,7 +1575,8 @@ def admin_dashboard():
                            status_filter=status_filter, category_filter=category_filter,
                            total_pending=total_pending, total_in_progress=total_in_progress,
                            total_work_completed=total_work_completed, total_resolved=total_resolved,
-                           total_deps=total_deps, recent_logs=recent_logs)
+                           total_deps=total_deps, recent_logs=recent_logs,
+                           needs_assign=needs_assign, needs_verify=needs_verify)
 
 
 @app.route('/complaint/<int:complaint_id>')

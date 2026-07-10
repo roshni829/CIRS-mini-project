@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register - CIRS</title>
-    <link rel="icon" href="data:,">
+    <title>Register — CIRS</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="auth-page">
@@ -15,7 +14,7 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">
+                    <div class="alert alert-{{ category | alert_class }}">
                         {{ message }}
                         <button class="close" onclick="this.parentElement.remove()">&times;</button>
                     </div>
@@ -26,12 +25,12 @@
         <form method="POST" action="{{ url_for('register') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
-                <label for="name">Name</label>
+                <label for="name">Full Name</label>
                 <input type="text" class="form-control" id="name" name="name" required placeholder="Enter your name">
             </div>
             <div class="form-group">
                 <label for="email">Email</label>
-                <input type="email" class="form-control" id="email" name="email" required placeholder="you@example.com">
+                <input type="email" class="form-control" id="email" name="email" required placeholder="you@campus.edu">
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
@@ -41,10 +40,9 @@
         </form>
 
         <div class="auth-footer-link">
-            Already have an account? <a href="{{ url_for('login') }}">Login</a>
+            Already have an account? <a href="{{ url_for('login') }}">Sign In</a>
         </div>
     </div>
-
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

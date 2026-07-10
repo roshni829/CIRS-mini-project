@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - CIRS</title>
+    <title>Sign In — CIRS</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="auth-page">
     <div class="auth-box">
-        <h2>Welcome</h2>
-        <p class="subtitle">Collaborative Issue Resolution System. Sign in to your account to continue.</p>
+        <h2>Sign In</h2>
+        <p class="subtitle">Collaborative Issue Resolution System. Sign in to access your workspace.</p>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">
+                    <div class="alert alert-{{ category | alert_class }}">
                         {{ message }}
                         <button class="close" onclick="this.parentElement.remove()">&times;</button>
                     </div>
@@ -40,20 +40,16 @@
         </div>
 
         <div class="demo-info">
-            <strong>Demo accounts</strong><br>
+            <strong>Demo Credentials</strong><br>
             Student: <code>student1@cirs.com</code> / <code>student123</code><br>
-            Student: <code>student2@cirs.com</code> / <code>student123</code><br>
             Admin: <code>admin@cirs.com</code> / <code>admin123</code><br>
-            &#128295; Technician: <code>plumber@cirs.com</code> / <code>tech123</code><br>
-            &#128295; Technician: <code>electrician@cirs.com</code> / <code>tech123</code><br>
-            &#128295; Technician: <code>carpenter@cirs.com</code> / <code>tech123</code>
+            Technician: <code>electrician@cirs.com</code> / <code>tech123</code>
         </div>
 
-        <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;">
+        <div style="text-align:center;margin-top:18px;padding-top:16px;border-top:1px solid var(--gray-200);font-size:12px;color:var(--gray-400);">
             Collaborative Issue Resolution System
         </div>
     </div>
-
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

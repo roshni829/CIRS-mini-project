@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Dashboard - CIRS</title>
+    <title>Student Portal — CIRS</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -12,25 +12,20 @@
         <div class="sidebar">
             <div class="sidebar-header">
                 <h1>Student Portal</h1>
-                <div class="subtitle">Collaborative Issue Resolution System</div>
+                <div class="subtitle">CIRS</div>
             </div>
             <div class="sidebar-nav">
                 <a href="{{ url_for('user_dashboard') }}" class="active">
-                    <span class="icon">&#9632;</span>
-                    <span>Dashboard</span>
+                    <span class="icon">&#9632;</span><span>Dashboard</span>
                 </a>
                 <a href="{{ url_for('submit_complaint') }}">
-                    <span class="icon">+</span>
-                    <span>Report Issue</span>
+                    <span class="icon">+</span><span>Report Issue</span>
                 </a>
                 <a href="{{ url_for('logout') }}">
-                    <span class="icon">&larr;</span>
-                    <span>Logout</span>
+                    <span class="icon">&larr;</span><span>Sign Out</span>
                 </a>
             </div>
-            <div class="sidebar-footer">
-                <strong>{{ session['name'] }}</strong> &mdash; Student
-            </div>
+            <div class="sidebar-footer"><strong>{{ session['name'] }}</strong> — Student</div>
         </div>
 
         <!-- Main Content -->
@@ -38,10 +33,11 @@
             <div class="top-bar">
                 <div>
                     <h2>Student Dashboard</h2>
-                    <p class="page-subtitle">Track the progress of your reported issues and browse campus-wide concerns.</p>
+                    <p class="page-subtitle">Track your reported issues and browse campus-wide concerns.</p>
                 </div>
                 <div class="user-info">
                     <span class="name">{{ session['name'] }}</span>
+                    <span class="current-date">{{ current_date() }}</span>
                     <a href="{{ url_for('submit_complaint') }}" class="btn btn-primary btn-sm">+ Report Issue</a>
                 </div>
             </div>
@@ -49,7 +45,7 @@
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}">
+                        <div class="alert alert-{{ category | alert_class }}">
                             {{ message }}
                             <button class="close" onclick="this.parentElement.remove()">&times;</button>
                         </div>
@@ -57,62 +53,58 @@
                 {% endif %}
             {% endwith %}
 
-            <!-- Section 1: My Raised Issues -->
+            <!-- My Raised Issues -->
             <div class="card">
                 <div class="card-header">
-                    My Raised Issues
+                    Reported Issues
                     <span class="count-label">{{ my_complaints|length }}</span>
                 </div>
                 <div class="card-body">
                     {% if my_complaints %}
                         {% for complaint in my_complaints %}
-                            <div class="complaint-item">
+                            <div class="issue-item">
                                 <div class="title-row">
-                                    <h4>
+                                    <h4>{{ complaint.title }}</h4>
+                                    <span id="status-{{ complaint.id }}" class="badge
+                                        {% if complaint.status == 'Pending' %}badge-amber
+                                        {% elif complaint.status == 'In Progress' %}badge-blue
+                                        {% elif complaint.status == 'Needs Review' %}badge-purple
+                                        {% else %}badge-green{% endif %}">
+                                        {{ complaint.status }}
+                                    </span>
+                                </div>
+                                <div class="details">
+                                    <span>
                                         {% if complaint.category == 'Electricity' %}&#9889;
-                                        {% elif complaint.category == 'Water' or complaint.category == 'Plumbing' %}&#128167;
+                                        {% elif complaint.category in ('Water','Plumbing') %}&#128167;
                                         {% elif complaint.category == 'Wi-Fi' %}&#128246;
                                         {% elif complaint.category == 'Cleanliness' %}&#129529;
                                         {% elif complaint.category == 'Carpentry' %}&#128736;
                                         {% elif complaint.category == 'Classroom' %}&#127891;
                                         {% elif complaint.category == 'Hostel' %}&#127968;
-                                        {% else %}&#128203;
-                                        {% endif %}
-                                        {{ complaint.title }}
-                                    </h4>
-                                    <span id="status-{{ complaint.id }}" class="badge
-                                        {% if complaint.status == 'Pending' %}badge-warning
-                                        {% elif complaint.status == 'In Progress' %}badge-info
-                                        {% elif complaint.status == 'Needs Review' %}badge-review
-                                        {% else %}badge-success{% endif %}">
-                                        {{ complaint.status }}
+                                        {% else %}&#128203;{% endif %}
+                                        {{ complaint.category }}
                                     </span>
-                                </div>
-                                <div class="details">
-                                    <span>{{ complaint.category }}</span>
                                     <span>{{ complaint.location }}</span>
                                     <span id="count-{{ complaint.id }}">{{ complaint.affected_users }} affected</span>
                                     <span class="badge
-                                        {% if complaint.priority == 'High' %}badge-danger
-                                        {% elif complaint.priority == 'Medium' %}badge-warning
-                                        {% else %}badge-secondary{% endif %}">
-                                        {{ complaint.priority }}
-                                    </span>
+                                        {% if complaint.priority == 'High' %}badge-red
+                                        {% elif complaint.priority == 'Medium' %}badge-amber
+                                        {% else %}badge-gray{% endif %}">{{ complaint.priority }}</span>
                                     <span>{{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
-                                    <span>Updated {{ complaint.updated_at | format_datetime }}</span>
                                     {% if complaint.technician_name %}
                                     <span>&#128295; {{ complaint.technician_name }}</span>
                                     {% endif %}
                                 </div>
                                 {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
-                                <div class="resolution-note">Resolution: {{ complaint.resolution_notes }}</div>
+                                <div class="resolution-note">{{ complaint.resolution_notes }}</div>
                                 {% endif %}
                                 {% if confirmed_deps and complaint.id in confirmed_deps %}
                                 <div class="linked-info">
                                     {% for dep in confirmed_deps[complaint.id] %}
-                                    <span class="linked-issue">&#128279; Linked issue: {{ dep.parent_title }}</span>
+                                    <span class="linked-issue">&#128279; Linked: {{ dep.parent_title }}</span>
                                     {% endfor %}
-                                    <span class="linked-note">Resolution may depend on this linked issue.</span>
+                                    <span class="linked-note">Resolution may depend on the linked issue.</span>
                                 </div>
                                 {% endif %}
                                 <div class="actions">
@@ -123,54 +115,39 @@
                     {% else %}
                         <div class="empty-state">
                             <span class="empty-icon">&#128203;</span>
-                            <p>You haven't reported any issues yet.</p>
+                            <p>No issues reported yet.</p>
                             <a href="{{ url_for('submit_complaint') }}" class="btn btn-primary btn-sm">Report an Issue</a>
                         </div>
                     {% endif %}
                 </div>
             </div>
 
-            <!-- Section 2: Issues I Joined -->
+            <!-- Issues I Joined -->
             <div class="card">
                 <div class="card-header">
-                    Issues I Joined
+                    Joined Issues
                     <span class="count-label">{{ joined|length }}</span>
                 </div>
                 <div class="card-body">
                     {% if joined %}
                         {% for complaint in joined %}
-                            <div class="complaint-item">
+                            <div class="issue-item">
                                 <div class="title-row">
-                                    <h4>
-                                        {% if complaint.category == 'Electricity' %}&#9889;
-                                        {% elif complaint.category == 'Water' or complaint.category == 'Plumbing' %}&#128167;
-                                        {% elif complaint.category == 'Wi-Fi' %}&#128246;
-                                        {% elif complaint.category == 'Cleanliness' %}&#129529;
-                                        {% elif complaint.category == 'Carpentry' %}&#128736;
-                                        {% elif complaint.category == 'Classroom' %}&#127891;
-                                        {% elif complaint.category == 'Hostel' %}&#127968;
-                                        {% else %}&#128203;
-                                        {% endif %}
-                                        {{ complaint.title }}
-                                    </h4>
+                                    <h4>{{ complaint.title }}</h4>
                                     <span id="status-{{ complaint.id }}" class="badge
-                                        {% if complaint.status == 'Pending' %}badge-warning
-                                        {% elif complaint.status == 'In Progress' %}badge-info
-                                        {% elif complaint.status == 'Needs Review' %}badge-review
-                                        {% else %}badge-success{% endif %}">
-                                        {{ complaint.status }}
-                                    </span>
+                                        {% if complaint.status == 'Pending' %}badge-amber
+                                        {% elif complaint.status == 'In Progress' %}badge-blue
+                                        {% elif complaint.status == 'Needs Review' %}badge-purple
+                                        {% else %}badge-green{% endif %}">{{ complaint.status }}</span>
                                 </div>
                                 <div class="details">
                                     <span>{{ complaint.category }}</span>
                                     <span>{{ complaint.location }}</span>
                                     <span id="count-{{ complaint.id }}">{{ complaint.affected_users }} affected</span>
                                     <span class="badge
-                                        {% if complaint.priority == 'High' %}badge-danger
-                                        {% elif complaint.priority == 'Medium' %}badge-warning
-                                        {% else %}badge-secondary{% endif %}">
-                                        {{ complaint.priority }}
-                                    </span>
+                                        {% if complaint.priority == 'High' %}badge-red
+                                        {% elif complaint.priority == 'Medium' %}badge-amber
+                                        {% else %}badge-gray{% endif %}">{{ complaint.priority }}</span>
                                     <span>{{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
                                     <span>Joined {{ complaint.joined_on | format_datetime }}</span>
                                     {% if complaint.technician_name %}
@@ -178,14 +155,14 @@
                                     {% endif %}
                                 </div>
                                 {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
-                                <div class="resolution-note">Resolution: {{ complaint.resolution_notes }}</div>
+                                <div class="resolution-note">{{ complaint.resolution_notes }}</div>
                                 {% endif %}
                                 {% if confirmed_deps and complaint.id in confirmed_deps %}
                                 <div class="linked-info">
                                     {% for dep in confirmed_deps[complaint.id] %}
-                                    <span class="linked-issue">&#128279; Linked issue: {{ dep.parent_title }}</span>
+                                    <span class="linked-issue">&#128279; Linked: {{ dep.parent_title }}</span>
                                     {% endfor %}
-                                    <span class="linked-note">Resolution may depend on this linked issue.</span>
+                                    <span class="linked-note">Resolution may depend on the linked issue.</span>
                                 </div>
                                 {% endif %}
                                 <div class="actions">
@@ -196,13 +173,13 @@
                     {% else %}
                         <div class="empty-state">
                             <span class="empty-icon">&#128101;</span>
-                            <p>You haven't joined any existing issues. Browse campus issues below to add your support.</p>
+                            <p>No joined issues yet. Browse campus issues below.</p>
                         </div>
                     {% endif %}
                 </div>
             </div>
 
-            <!-- Section 3: Existing Campus Issues -->
+            <!-- Existing Campus Issues -->
             <div class="card">
                 <div class="card-header">
                     Existing Campus Issues
@@ -211,48 +188,30 @@
                 <div class="card-body">
                     {% if open_complaints %}
                         {% for complaint in open_complaints %}
-                            <div class="complaint-item">
+                            <div class="issue-item">
                                 <div class="title-row">
-                                    <h4>
-                                        {% if complaint.category == 'Electricity' %}&#9889;
-                                        {% elif complaint.category == 'Water' or complaint.category == 'Plumbing' %}&#128167;
-                                        {% elif complaint.category == 'Wi-Fi' %}&#128246;
-                                        {% elif complaint.category == 'Cleanliness' %}&#129529;
-                                        {% elif complaint.category == 'Carpentry' %}&#128736;
-                                        {% elif complaint.category == 'Classroom' %}&#127891;
-                                        {% elif complaint.category == 'Hostel' %}&#127968;
-                                        {% else %}&#128203;
-                                        {% endif %}
-                                        {{ complaint.title }}
-                                    </h4>
+                                    <h4>{{ complaint.title }}</h4>
                                     <span id="status-{{ complaint.id }}" class="badge
-                                        {% if complaint.status == 'Pending' %}badge-warning
-                                        {% elif complaint.status == 'In Progress' %}badge-info
-                                        {% elif complaint.status == 'Needs Review' %}badge-review
-                                        {% else %}badge-success{% endif %}">
-                                        {{ complaint.status }}
-                                    </span>
+                                        {% if complaint.status == 'Pending' %}badge-amber
+                                        {% elif complaint.status == 'In Progress' %}badge-blue
+                                        {% elif complaint.status == 'Needs Review' %}badge-purple
+                                        {% else %}badge-green{% endif %}">{{ complaint.status }}</span>
                                 </div>
                                 <div class="details">
                                     <span>{{ complaint.category }}</span>
                                     <span>{{ complaint.location }}</span>
-                                    <span id="count-{{ complaint.id }}">{{ complaint.affected_users }} students affected</span>
+                                    <span id="count-{{ complaint.id }}">{{ complaint.affected_users }} students</span>
                                     <span class="badge
-                                        {% if complaint.priority == 'High' %}badge-danger
-                                        {% elif complaint.priority == 'Medium' %}badge-warning
-                                        {% else %}badge-secondary{% endif %}">
-                                        {{ complaint.priority }}
-                                    </span>
+                                        {% if complaint.priority == 'High' %}badge-red
+                                        {% elif complaint.priority == 'Medium' %}badge-amber
+                                        {% else %}badge-gray{% endif %}">{{ complaint.priority }}</span>
                                     <span>{{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
                                     <span>Reported by {{ complaint.creator_name }}</span>
-                                    {% if complaint.technician_name %}
-                                    <span>&#128295; {{ complaint.technician_name }}</span>
-                                    {% endif %}
                                 </div>
                                 <div class="actions">
                                     <form method="POST" action="{{ url_for('join_complaint', complaint_id=complaint.id) }}" class="inline-form">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <button type="submit" class="btn btn-success btn-sm">Join Existing Issue</button>
+                                        <button type="submit" class="btn btn-success btn-sm">Join Issue</button>
                                     </form>
                                     <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details</a>
                                 </div>
@@ -261,19 +220,15 @@
                     {% else %}
                         <div class="empty-state">
                             <span class="empty-icon">&#128200;</span>
-                            <p>All campus issues have been addressed. No open issues to join at this time.</p>
+                            <p>All campus issues have been addressed. No open issues at this time.</p>
                         </div>
                     {% endif %}
                 </div>
             </div>
 
-            <!-- Footer -->
-            <div class="app-footer">
-                Collaborative Issue Resolution System
-            </div>
+            <div class="app-footer">Collaborative Issue Resolution System</div>
         </div>
     </div>
-
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

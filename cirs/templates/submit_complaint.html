@@ -3,52 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Report Issue - CIRS</title>
+    <title>Report Issue — CIRS</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="page-wrapper">
-        <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
                 <h1>Student Portal</h1>
-                <div class="subtitle">Collaborative Issue Resolution System</div>
+                <div class="subtitle">CIRS</div>
             </div>
             <div class="sidebar-nav">
                 <a href="{{ url_for('user_dashboard') }}">
-                    <span class="icon">&#9632;</span>
-                    <span>Dashboard</span>
+                    <span class="icon">&#9632;</span><span>Dashboard</span>
                 </a>
                 <a href="{{ url_for('submit_complaint') }}" class="active">
-                    <span class="icon">+</span>
-                    <span>Report Issue</span>
+                    <span class="icon">+</span><span>Report Issue</span>
                 </a>
                 <a href="{{ url_for('logout') }}">
-                    <span class="icon">&larr;</span>
-                    <span>Logout</span>
+                    <span class="icon">&larr;</span><span>Sign Out</span>
                 </a>
             </div>
-            <div class="sidebar-footer">
-                <strong>{{ session['name'] }}</strong> &mdash; Student
-            </div>
+            <div class="sidebar-footer"><strong>{{ session['name'] }}</strong> — Student</div>
         </div>
 
-        <!-- Main Content -->
         <div class="main-content">
             <div class="top-bar">
                 <div>
                     <h2>Report an Issue</h2>
-                    <p class="page-subtitle">Describe the campus issue you are experiencing. The system will check for similar existing issues automatically.</p>
+                    <p class="page-subtitle">Describe the campus issue you are experiencing. The system will automatically check for similar existing issues.</p>
                 </div>
                 <div class="user-info">
                     <span class="name">{{ session['name'] }}</span>
+                    <span class="current-date">{{ current_date() }}</span>
                 </div>
             </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}">
+                        <div class="alert alert-{{ category | alert_class }}">
                             {{ message }}
                             <button class="close" onclick="this.parentElement.remove()">&times;</button>
                         </div>
@@ -64,27 +58,26 @@
                             <label for="title">Issue Title</label>
                             <input type="text" class="form-control" id="title" name="title" required placeholder="e.g., Wi-Fi not working in Block A" maxlength="200">
                         </div>
-
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="category">Category</label>
                                 <select class="form-control" id="category" name="category" required>
-                                    <option value="">Select category</option>
-                                    <option value="Wi-Fi">&#128246; Wi-Fi</option>
-                                    <option value="Electricity">&#9889; Electricity</option>
-                                    <option value="Water">&#128167; Water</option>
-                                    <option value="Plumbing">&#128295; Plumbing</option>
-                                    <option value="Carpentry">&#128736; Carpentry</option>
-                                    <option value="Cleanliness">&#129529; Cleanliness</option>
-                                    <option value="Classroom">&#127891; Classroom</option>
-                                    <option value="Hostel">&#127968; Hostel</option>
-                                    <option value="Other">&#128203; Other</option>
+                                    <option value="">Select...</option>
+                                    <option value="Wi-Fi">Wi-Fi</option>
+                                    <option value="Electricity">Electricity</option>
+                                    <option value="Water">Water</option>
+                                    <option value="Plumbing">Plumbing</option>
+                                    <option value="Carpentry">Carpentry</option>
+                                    <option value="Cleanliness">Cleanliness</option>
+                                    <option value="Classroom">Classroom</option>
+                                    <option value="Hostel">Hostel</option>
+                                    <option value="Other">Other</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="issue_type">Cause of Issue</label>
+                                <label for="issue_type">Cause</label>
                                 <select class="form-control" id="issue_type" name="issue_type" required>
-                                    <option value="">Select cause</option>
+                                    <option value="">Select...</option>
                                 </select>
                             </div>
                         </div>
@@ -93,23 +86,19 @@
                                 <label for="location">Location</label>
                                 <input type="text" class="form-control" id="location" name="location" required placeholder="e.g., Hostel Block A, Room 201">
                             </div>
-                            <div class="form-group">
-                            </div>
+                            <div class="form-group"></div>
                         </div>
-
                         <div class="form-group">
                             <label for="description">Description</label>
-                            <textarea class="form-control" id="description" name="description" rows="4" required placeholder="Describe the issue in detail. Include when it started, what is affected, and any other relevant information."></textarea>
+                            <textarea class="form-control" id="description" name="description" rows="4" required placeholder="Describe the issue in detail. Include when it started and what is affected."></textarea>
                         </div>
-
-                        <button type="submit" class="btn btn-primary btn-lg">Report Issue</button>
+                        <button type="submit" class="btn btn-primary">Report Issue</button>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Similar Issue Modal -->
     {% if show_similar_modal and similar %}
     <div class="modal-overlay active" id="similarModal">
         <div class="modal-box">
@@ -118,10 +107,7 @@
                 <button class="close close-modal">&times;</button>
             </div>
             <div class="modal-body">
-                <p>
-                    A similar issue already exists. You can join the existing issue instead of creating a duplicate.
-                </p>
-
+                <p>A similar issue already exists. Join the existing issue instead of creating a duplicate.</p>
                 {% for complaint in similar %}
                 <div class="similar-item">
                     <h5>{{ complaint.title }}</h5>
@@ -129,34 +115,25 @@
                         <span>{{ complaint.category }}</span>
                         <span>{{ complaint.location }}</span>
                         <span class="badge
-                            {% if complaint.status == 'Pending' %}badge-warning
-                            {% elif complaint.status == 'In Progress' %}badge-info
-                            {% elif complaint.status == 'Needs Review' %}badge-review
-                            {% else %}badge-success{% endif %}">
-                            {{ complaint.status }}
-                        </span>
+                            {% if complaint.status == 'Pending' %}badge-amber
+                            {% elif complaint.status == 'In Progress' %}badge-blue
+                            {% elif complaint.status == 'Needs Review' %}badge-purple
+                            {% else %}badge-green{% endif %}">{{ complaint.status }}</span>
                         <span>{{ complaint.affected_users }} affected</span>
-                        <span class="badge
-                            {% if complaint.priority == 'High' %}badge-danger
-                            {% elif complaint.priority == 'Medium' %}badge-warning
-                            {% else %}badge-secondary{% endif %}">
-                            {{ complaint.priority }}
-                        </span>
                     </div>
                     <div class="sim-actions">
                         <form method="POST" action="{{ url_for('join_complaint', complaint_id=complaint.id) }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-success btn-sm">Join Existing Issue</button>
+                            <button type="submit" class="btn btn-success btn-sm">Join Issue</button>
                         </form>
                         <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details</a>
                     </div>
                 </div>
                 {% endfor %}
-
                 <div class="modal-create-new">
                     <form method="POST" action="{{ url_for('create_new_complaint') }}" onsubmit="return confirm('Create a new issue anyway?');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm" style="color:#6b7280;">Report New Issue Anyway</button>
+                        <button type="submit" class="btn btn-sm" style="color:var(--gray-400);">Report New Issue Anyway</button>
                     </form>
                 </div>
             </div>
@@ -167,13 +144,9 @@
     </div>
     {% endif %}
 
-    <!-- Footer -->
-    <div class="app-footer" style="margin-top:24px;">
-        Collaborative Issue Resolution System
-    </div>
+    <div class="app-footer" style="margin-top:24px;">Collaborative Issue Resolution System</div>
 
     <script>
-        // Dynamic Cause of Issue dropdown based on category
         const issueTypeOptions = {
             'Electricity': ['Power Cut', 'Low Voltage', 'Wiring Issue', 'Switch/Board Issue', 'Other'],
             'Water': ['Water Not Coming', 'Tank Empty', 'Motor/Pump Not Working', 'Pipe Leakage', 'Tap Broken', 'Other'],
@@ -181,26 +154,17 @@
             'Plumbing': ['Pipe Burst', 'Tap/Faucet Leak', 'Blocked Drain', 'Water Heater Issue', 'Other'],
             'Carpentry': ['Door Issue', 'Window Issue', 'Furniture Repair', 'Shelf/Cabinet Issue', 'Other'],
             'Cleanliness': ['Washroom Cleaning', 'Garbage Issue', 'Bad Smell', 'Other'],
-            'Classroom': ['Other'],
-            'Hostel': ['Other'],
-            'Other': ['Other'],
+            'Classroom': ['Other'], 'Hostel': ['Other'], 'Other': ['Other'],
         };
-
         document.getElementById('category').addEventListener('change', function() {
-            const issueTypeSelect = document.getElementById('issue_type');
-            const category = this.value;
-            issueTypeSelect.innerHTML = '<option value="">Select cause</option>';
-
-            const options = issueTypeOptions[category] || ['Other'];
-            options.forEach(function(opt) {
-                const option = document.createElement('option');
-                option.value = opt;
-                option.textContent = opt;
-                issueTypeSelect.appendChild(option);
+            const sel = document.getElementById('issue_type');
+            sel.innerHTML = '<option value="">Select...</option>';
+            (issueTypeOptions[this.value] || ['Other']).forEach(function(o) {
+                const opt = document.createElement('option');
+                opt.value = o; opt.textContent = o; sel.appendChild(opt);
             });
         });
     </script>
-
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
