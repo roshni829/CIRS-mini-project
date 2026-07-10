@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Submit Complaint - CIRS</title>
+    <title>Report Issue - CIRS</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -11,8 +11,8 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
-                <h1>Issue Portal</h1>
-                <div class="subtitle">CIRS</div>
+                <h1>Student Portal</h1>
+                <div class="subtitle">Collaborative Issue Resolution System</div>
             </div>
             <div class="sidebar-nav">
                 <a href="{{ url_for('user_dashboard') }}">
@@ -21,7 +21,7 @@
                 </a>
                 <a href="{{ url_for('submit_complaint') }}" class="active">
                     <span class="icon">+</span>
-                    <span>New Complaint</span>
+                    <span>Report Issue</span>
                 </a>
                 <a href="{{ url_for('logout') }}">
                     <span class="icon">&larr;</span>
@@ -29,14 +29,17 @@
                 </a>
             </div>
             <div class="sidebar-footer">
-                {{ session['name'] }}
+                <strong>{{ session['name'] }}</strong> &mdash; Student
             </div>
         </div>
 
         <!-- Main Content -->
         <div class="main-content">
             <div class="top-bar">
-                <h2>Submit a Complaint</h2>
+                <div>
+                    <h2>Report an Issue</h2>
+                    <p class="page-subtitle">Describe the campus issue you are experiencing. The system will check for similar existing issues automatically.</p>
+                </div>
                 <div class="user-info">
                     <span class="name">{{ session['name'] }}</span>
                 </div>
@@ -58,7 +61,7 @@
                     <form method="POST" action="{{ url_for('submit_complaint') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="form-group">
-                            <label for="title">Complaint Title</label>
+                            <label for="title">Issue Title</label>
                             <input type="text" class="form-control" id="title" name="title" required placeholder="e.g., Wi-Fi not working in Block A" maxlength="200">
                         </div>
 
@@ -67,13 +70,15 @@
                                 <label for="category">Category</label>
                                 <select class="form-control" id="category" name="category" required>
                                     <option value="">Select category</option>
-                                    <option value="Wi-Fi">Wi-Fi</option>
-                                    <option value="Electricity">Electricity</option>
-                                    <option value="Water">Water</option>
-                                    <option value="Cleanliness">Cleanliness</option>
-                                    <option value="Classroom">Classroom</option>
-                                    <option value="Hostel">Hostel</option>
-                                    <option value="Other">Other</option>
+                                    <option value="Wi-Fi">&#128246; Wi-Fi</option>
+                                    <option value="Electricity">&#9889; Electricity</option>
+                                    <option value="Water">&#128167; Water</option>
+                                    <option value="Plumbing">&#128295; Plumbing</option>
+                                    <option value="Carpentry">&#128736; Carpentry</option>
+                                    <option value="Cleanliness">&#129529; Cleanliness</option>
+                                    <option value="Classroom">&#127891; Classroom</option>
+                                    <option value="Hostel">&#127968; Hostel</option>
+                                    <option value="Other">&#128203; Other</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -86,36 +91,35 @@
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="location">Location</label>
-                                <input type="text" class="form-control" id="location" name="location" required placeholder="e.g., Hostel Block A">
+                                <input type="text" class="form-control" id="location" name="location" required placeholder="e.g., Hostel Block A, Room 201">
                             </div>
                             <div class="form-group">
-                                <!-- Empty placeholder for alignment -->
                             </div>
                         </div>
 
                         <div class="form-group">
                             <label for="description">Description</label>
-                            <textarea class="form-control" id="description" name="description" rows="4" required placeholder="Describe the issue."></textarea>
+                            <textarea class="form-control" id="description" name="description" rows="4" required placeholder="Describe the issue in detail. Include when it started, what is affected, and any other relevant information."></textarea>
                         </div>
 
-                        <button type="submit" class="btn btn-primary">Submit</button>
+                        <button type="submit" class="btn btn-primary btn-lg">Report Issue</button>
                     </form>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Similar Complaint Modal -->
+    <!-- Similar Issue Modal -->
     {% if show_similar_modal and similar %}
     <div class="modal-overlay active" id="similarModal">
         <div class="modal-box">
             <div class="modal-header">
-                <span>Possible Existing Issue</span>
+                <span>Similar Issue Found</span>
                 <button class="close close-modal">&times;</button>
             </div>
             <div class="modal-body">
                 <p>
-                    Would you like to join the existing issue instead of creating a new one?
+                    A similar issue already exists. You can join the existing issue instead of creating a duplicate.
                 </p>
 
                 {% for complaint in similar %}
@@ -141,7 +145,7 @@
                     <div class="sim-actions">
                         <form method="POST" action="{{ url_for('join_complaint', complaint_id=complaint.id) }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-success btn-sm">Join Issue</button>
+                            <button type="submit" class="btn btn-success btn-sm">Join Existing Issue</button>
                         </form>
                         <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details</a>
                     </div>
@@ -149,8 +153,9 @@
                 {% endfor %}
 
                 <div class="modal-create-new">
-                    <form method="POST" action="{{ url_for('create_new_complaint') }}" onsubmit="return confirm('Create a new complaint anyway?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">                            <button type="submit" class="btn btn-sm" style="color:#6b7280;">Create New Issue Anyway</button>
+                    <form method="POST" action="{{ url_for('create_new_complaint') }}" onsubmit="return confirm('Create a new issue anyway?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm" style="color:#6b7280;">Report New Issue Anyway</button>
                     </form>
                 </div>
             </div>
@@ -161,12 +166,19 @@
     </div>
     {% endif %}
 
+    <!-- Footer -->
+    <div class="app-footer" style="margin-top:24px;">
+        Collaborative Issue Resolution System
+    </div>
+
     <script>
         // Dynamic Cause of Issue dropdown based on category
         const issueTypeOptions = {
             'Electricity': ['Power Cut', 'Low Voltage', 'Wiring Issue', 'Switch/Board Issue', 'Other'],
             'Water': ['Water Not Coming', 'Tank Empty', 'Motor/Pump Not Working', 'Pipe Leakage', 'Tap Broken', 'Other'],
             'Wi-Fi': ['Router Not Working', 'Slow Internet', 'No Network', 'Password/Login Issue', 'Other'],
+            'Plumbing': ['Pipe Burst', 'Tap/Faucet Leak', 'Blocked Drain', 'Water Heater Issue', 'Other'],
+            'Carpentry': ['Door Issue', 'Window Issue', 'Furniture Repair', 'Shelf/Cabinet Issue', 'Other'],
             'Cleanliness': ['Washroom Cleaning', 'Garbage Issue', 'Bad Smell', 'Other'],
             'Classroom': ['Other'],
             'Hostel': ['Other'],

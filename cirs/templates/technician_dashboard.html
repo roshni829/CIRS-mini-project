@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technician Workspace - CIRS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page-wrapper">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>Technician Workspace</h1>
+                <div class="subtitle">Collaborative Issue Resolution System</div>
+            </div>
+            <div class="sidebar-nav">
+                <a href="{{ url_for('technician_dashboard') }}" class="active">
+                    <span class="icon">&#9632;</span>
+                    <span>Assigned Work</span>
+                </a>
+                <a href="{{ url_for('logout') }}">
+                    <span class="icon">&larr;</span>
+                    <span>Logout</span>
+                </a>
+            </div>
+            <div class="sidebar-footer">
+                <strong>{{ session['name'] }}</strong> &mdash; Technician
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="top-bar">
+                <div>
+                    <h2>Technician Workspace</h2>
+                    <p class="page-subtitle">View and update assigned maintenance tasks.</p>
+                </div>
+                <div class="user-info">
+                    <span class="name">{{ session['name'] }}</span>
+                    <span class="count-label">{{ complaints|length }} assigned</span>
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}">
+                            {{ message }}
+                            <button class="close" onclick="this.parentElement.remove()">&times;</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            {% if complaints %}
+                <!-- Current Work (Assigned / Work Started) -->
+                {% if current_work %}
+                <div class="card">
+                    <div class="card-header">
+                        Current Work
+                        <span class="count-label">{{ current_work|length }} active</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Issue</th>
+                                    <th>Location</th>
+                                    <th>Category</th>
+                                    <th>Priority</th>
+                                    <th>Expected Resolution</th>
+                                    <th>Your Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for complaint in current_work %}
+                                    <tr>
+                                        <td>
+                                            <div class="complaint-title">{{ complaint.title }}</div>
+                                            <div class="meta">Reported by {{ complaint.creator_name }}</div>
+                                        </td>
+                                        <td>{{ complaint.location }}</td>
+                                        <td>{{ complaint.category }}</td>
+                                        <td>
+                                            <span class="badge
+                                                {% if complaint.priority == 'High' %}badge-danger
+                                                {% elif complaint.priority == 'Medium' %}badge-warning
+                                                {% else %}badge-secondary{% endif %}">
+                                                {{ complaint.priority }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="resolution-time">{{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge
+                                                {% if complaint.technician_status == 'Assigned' %}badge-info
+                                                {% else %}badge-warning{% endif %}">
+                                                {{ complaint.technician_status }}
+                                            </span>
+                                        </td>
+                                        <td style="min-width:180px;">
+                                            <div style="display:flex;flex-direction:column;gap:4px;">
+                                                {% if complaint.technician_status == 'Assigned' %}
+                                                    <form method="POST" action="{{ url_for('technician_start_work', complaint_id=complaint.id) }}" style="display:inline;">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                        <button type="submit" class="btn btn-primary btn-sm">Start Work</button>
+                                                    </form>
+                                                {% endif %}
+
+                                                {% if complaint.technician_status == 'Work Started' %}
+                                                    <form method="POST" action="{{ url_for('technician_mark_completed', complaint_id=complaint.id) }}" style="display:inline;">
+                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                        <button type="submit" class="btn btn-success btn-sm">Mark Work Completed</button>
+                                                    </form>
+                                                {% endif %}
+
+                                                <button class="btn btn-sm" onclick="document.getElementById('note-form-{{ complaint.id }}').style.display='flex'">Add Work Note</button>
+                                                <form id="note-form-{{ complaint.id }}" method="POST" action="{{ url_for('technician_add_note', complaint_id=complaint.id) }}" style="display:none;margin-top:4px;gap:4px;">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <input type="text" name="note" placeholder="Describe your work..." style="flex:1;padding:4px 8px;font-size:12px;border:1.5px solid #d1d5db;border-radius:6px;" required>
+                                                    <button type="submit" class="btn btn-sm btn-primary">Add</button>
+                                                </form>
+
+                                                <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm" style="margin-top:2px;">View Details</a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Completed Work -->
+                {% if completed_work %}
+                <div class="card">
+                    <div class="card-header">
+                        Completed Work
+                        <span class="count-label">{{ completed_work|length }} awaiting verification</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Issue</th>
+                                    <th>Location</th>
+                                    <th>Category</th>
+                                    <th>Priority</th>
+                                    <th>Expected Resolution</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for complaint in completed_work %}
+                                    <tr>
+                                        <td>
+                                            <div class="complaint-title">{{ complaint.title }}</div>
+                                            <div class="meta">Reported by {{ complaint.creator_name }}</div>
+                                        </td>
+                                        <td>{{ complaint.location }}</td>
+                                        <td>{{ complaint.category }}</td>
+                                        <td>
+                                            <span class="badge
+                                                {% if complaint.priority == 'High' %}badge-danger
+                                                {% elif complaint.priority == 'Medium' %}badge-warning
+                                                {% else %}badge-secondary{% endif %}">
+                                                {{ complaint.priority }}
+                                        </span>
+                                        </td>
+                                        <td>
+                                            <span class="resolution-time">{{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-secondary">{{ complaint.technician_status }}</span>
+                                            <div style="font-size:11px;color:#16a34a;font-weight:500;margin-top:2px;">Awaiting admin verification</div>
+                                        </td>
+                                        <td>
+                                            <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details</a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if not current_work and not completed_work %}
+                <div class="card">
+                    <div class="card-body">
+                        <div class="empty-state">
+                            <span class="empty-icon">&#128203;</span>
+                            <p>No issues assigned to you.</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="card">
+                    <div class="card-body">
+                        <div class="empty-state">
+                            <span class="empty-icon">&#128203;</span>
+                            <p>No issues assigned to you yet. New assignments will appear here.</p>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Footer -->
+            <div class="app-footer">
+                Collaborative Issue Resolution System
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

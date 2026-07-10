@@ -30,8 +30,8 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
-                <h1>Issue Management</h1>
-                <div class="subtitle">CIRS Admin</div>
+                <h1>Administration</h1>
+                <div class="subtitle">Collaborative Issue Resolution System</div>
             </div>
             <div class="sidebar-nav">
                 <a href="{{ url_for('admin_dashboard') }}">
@@ -47,14 +47,14 @@
                     <span>Logout</span>
                 </a>
             </div>
-            <div class="sidebar-footer">{{ session['name'] }}</div>
+            <div class="sidebar-footer"><strong>{{ session['name'] }}</strong> &mdash; Administrator</div>
         </div>
 
         <!-- Main Content -->
         <div class="main-content">
             <div class="page-header">
-                <h2>SLA / Resolution Time Settings</h2>
-                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-sm">← Back to Dashboard</a>
+                <h2>Resolution Time Settings</h2>
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-sm">&larr; Back to Dashboard</a>
             </div>
 
             {% with messages = get_flashed_messages(with_categories=true) %}

@@ -109,6 +109,28 @@ def _infer_issue_type(category, title, description):
             return 'Bad Smell'
         return 'Other'
 
+    if cat == 'plumbing':
+        if any(kw in text for kw in ['pipe burst', 'burst pipe']):
+            return 'Pipe Burst'
+        if any(kw in text for kw in ['tap', 'faucet', 'leak']):
+            return 'Tap/Faucet Leak'
+        if any(kw in text for kw in ['toilet blocked', 'blocked', 'clogged', 'drain']):
+            return 'Blocked Drain'
+        if any(kw in text for kw in ['water heater', 'geyser']):
+            return 'Water Heater Issue'
+        return 'Other'
+
+    if cat == 'carpentry':
+        if any(kw in text for kw in ['door', 'door lock', 'broken door']):
+            return 'Door Issue'
+        if any(kw in text for kw in ['window', 'window lock', 'broken window']):
+            return 'Window Issue'
+        if any(kw in text for kw in ['furniture', 'chair', 'table', 'bench', 'desk']):
+            return 'Furniture Repair'
+        if any(kw in text for kw in ['shelf', 'cabinet', 'cupboard']):
+            return 'Shelf/Cabinet Issue'
+        return 'Other'
+
     return 'Other'
 
 
@@ -122,6 +144,8 @@ _DEFAULT_SLA = {
     'Cleanliness': {'High': 6,  'Medium': 12, 'Low': 24},
     'Classroom':   {'High': 2,  'Medium': 6,  'Low': 12},
     'Hostel':      {'High': 4,  'Medium': 8,  'Low': 24},
+    'Plumbing':    {'High': 2,  'Medium': 6,  'Low': 12},
+    'Carpentry':   {'High': 6,  'Medium': 12, 'Low': 24},
     'Other':       {'High': 6,  'Medium': 12, 'Low': 24},
 }
 
@@ -244,6 +268,12 @@ def init_db():
     # Migration: add issue_type column to complaints
     _run_migration("ALTER TABLE complaints ADD COLUMN issue_type TEXT DEFAULT ''")
 
+    # Migration: add assigned_to column
+    _run_migration("ALTER TABLE complaints ADD COLUMN assigned_to INTEGER REFERENCES users(id)")
+
+    # Migration: add technician_status column
+    _run_migration("ALTER TABLE complaints ADD COLUMN technician_status TEXT DEFAULT 'Not Assigned'")
+
     db.commit()
 
     # Migration: infer issue_type for existing complaints where it's empty
@@ -277,6 +307,9 @@ def seed_demo_data():
         ('Student Two', 'student2@cirs.com', generate_password_hash('student123'), 'user'),
         ('Student Three', 'student3@cirs.com', generate_password_hash('student123'), 'user'),
         ('Admin User', 'admin@cirs.com', generate_password_hash('admin123'), 'admin'),
+        ('Plumbing Technician', 'plumber@cirs.com', generate_password_hash('tech123'), 'technician'),
+        ('Electrical Technician', 'electrician@cirs.com', generate_password_hash('tech123'), 'technician'),
+        ('Carpentry Technician', 'carpenter@cirs.com', generate_password_hash('tech123'), 'technician'),
     ]
     for name, email, password, role in demo_users:
         db_execute(db,
@@ -702,42 +735,56 @@ def timeline_event_name(action):
     """Map raw history action text to a cleaner timeline event name."""
     lower = action.lower()
     if 'created' in lower:
-        return 'Complaint Raised'
+        return 'Issue Reported'
     if 'joined' in lower:
-        return 'Student Joined'
+        return 'Joined Existing Issue'
     if 'confirmed dependency' in lower:
         return 'Dependency Confirmed'
     if 'ignored dependency' in lower:
         return 'Dependency Ignored'
-    if 'resolved issue' in lower or lower.startswith('resolved'):
-        return 'Issue Resolved'
+    if 'resolved issue' in lower or lower.startswith('resolved') or 'marked issue resolved' in lower:
+        return 'Verified & Resolved'
     if 'changed status to' in lower:
         if 'in progress' in lower:
             return 'Status: In Progress'
         if 'pending' in lower:
             return 'Status: Pending'
         if 'resolved' in lower:
-            return 'Status: Resolved'
+            return 'Verified & Resolved'
         return 'Status Updated'
     if 'linked issues need review' in lower:
         return 'Linked Issues Notice'
+    if 'assigned issue to' in lower or 'reassigned issue' in lower:
+        return 'Technician Assigned'
+    if 'started work' in lower:
+        return 'Work Started'
+    if 'marked work completed' in lower:
+        return 'Work Completed'
+    if 'note:' in lower:
+        return 'Work Note Added'
+    if 'auto-resolved' in lower:
+        return 'Auto-Resolved (Linked Issue)'
     return action
 
 
 def timeline_event_color(event_name):
     """Return a hex color for a timeline event based on its type."""
     colors = {
-        'Complaint Raised': '#2563eb',
-        'Student Joined': '#3b82f6',
+        'Issue Reported': '#2563eb',
+        'Joined Existing Issue': '#3b82f6',
         'Dependency Suggested': '#f59e0b',
         'Dependency Confirmed': '#16a34a',
         'Dependency Ignored': '#6b7280',
-        'Issue Resolved': '#16a34a',
+        'Verified & Resolved': '#16a34a',
         'Status: Pending': '#f59e0b',
         'Status: In Progress': '#3b82f6',
-        'Status: Resolved': '#16a34a',
         'Status Updated': '#6b7280',
         'Linked Issues Notice': '#dc2626',
+        'Technician Assigned': '#8b5cf6',
+        'Work Started': '#f97316',
+        'Work Completed': '#22c55e',
+        'Work Note Added': '#a855f7',
+        'Auto-Resolved (Linked Issue)': '#6366f1',
     }
     return colors.get(event_name, '#9ca3af')
 
@@ -994,6 +1041,17 @@ def admin_required(f):
     return decorated
 
 
+def technician_required(f):
+    @wraps(f)
+    @login_required
+    def decorated(*args, **kwargs):
+        if session.get('role') != 'technician':
+            flash('Technician access required.', 'danger')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
+
+
 # ─── Routes ─────────────────────────────────────────────────────────────────────
 
 @app.route('/')
@@ -1048,6 +1106,8 @@ def login():
 
             if user['role'] == 'admin':
                 return redirect(url_for('admin_dashboard'))
+            if user['role'] == 'technician':
+                return redirect(url_for('technician_dashboard'))
             return redirect(url_for('user_dashboard'))
         else:
             flash('Invalid email or password.', 'danger')
@@ -1073,8 +1133,15 @@ def user_dashboard():
     db = get_db()
     user_id = session['user_id']
 
+    # Helper to resolve technician name
+    def _resolve_technician(complaint):
+        if complaint.get('assigned_to'):
+            tech = db_execute(db, "SELECT name FROM users WHERE id = ?", (complaint['assigned_to'],)).fetchone()
+            return tech['name'] if tech else None
+        return None
+
     # Complaints Raised by Me (where user is creator)
-    my_complaints = db_execute(db,
+    my_complaints_raw = db_execute(db,
         "SELECT c.*, cu.joined_at AS created_on, "
         "(SELECT COUNT(*) FROM complaint_users cu2 WHERE cu2.complaint_id = c.id) AS affected_users "
         "FROM complaints c JOIN complaint_users cu ON c.id = cu.complaint_id AND cu.user_id = ? AND cu.role_in_complaint = 'creator' "
@@ -1082,8 +1149,14 @@ def user_dashboard():
         (user_id,)
     ).fetchall()
 
+    my_complaints = []
+    for c in my_complaints_raw:
+        c_dict = dict(c)
+        c_dict['technician_name'] = _resolve_technician(c)
+        my_complaints.append(c_dict)
+
     # Complaints I Joined (where user is joined)
-    joined = db_execute(db,
+    joined_raw = db_execute(db,
         "SELECT c.*, cu.joined_at AS joined_on, "
         "(SELECT COUNT(*) FROM complaint_users cu2 WHERE cu2.complaint_id = c.id) AS affected_users "
         "FROM complaints c JOIN complaint_users cu ON c.id = cu.complaint_id "
@@ -1091,8 +1164,14 @@ def user_dashboard():
         (user_id,)
     ).fetchall()
 
+    joined = []
+    for c in joined_raw:
+        c_dict = dict(c)
+        c_dict['technician_name'] = _resolve_technician(c)
+        joined.append(c_dict)
+
     # Open complaints: unresolved, user hasn't created or joined
-    open_complaints = db_execute(db,
+    open_complaints_raw = db_execute(db,
         "SELECT c.*, u.name AS creator_name, "
         "(SELECT COUNT(*) FROM complaint_users cu WHERE cu.complaint_id = c.id) AS affected_users "
         "FROM complaints c JOIN users u ON c.created_by = u.id "
@@ -1101,6 +1180,12 @@ def user_dashboard():
         "ORDER BY c.created_at DESC",
         (user_id,)
     ).fetchall()
+
+    open_complaints = []
+    for c in open_complaints_raw:
+        c_dict = dict(c)
+        c_dict['technician_name'] = _resolve_technician(c)
+        open_complaints.append(c_dict)
 
     # Get confirmed dependencies for all complaint IDs visible to user
     all_complaint_ids = set()
@@ -1260,6 +1345,114 @@ def join_complaint(complaint_id):
     return redirect(url_for('user_dashboard'))
 
 
+# ─── Technician routes ────────────────────────────────────────────────────────────
+
+@app.route('/technician')
+@technician_required
+def technician_dashboard():
+    db = get_db()
+    user_id = session['user_id']
+
+    assigned_complaints = db_execute(db,
+        "SELECT c.*, u.name AS creator_name, "
+        "(SELECT COUNT(*) FROM complaint_users cu WHERE cu.complaint_id = c.id) AS affected_users "
+        "FROM complaints c JOIN users u ON c.created_by = u.id "
+        "WHERE c.assigned_to = ? "
+        "ORDER BY "
+        "  CASE c.priority "
+        "    WHEN 'High' THEN 1 "
+        "    WHEN 'Medium' THEN 2 "
+        "    WHEN 'Low' THEN 3 "
+        "  END, c.created_at DESC",
+        (user_id,)
+    ).fetchall()
+
+    # Split into current work and completed work for template
+    current_work = [c for c in assigned_complaints if c['technician_status'] in ('Assigned', 'Work Started')]
+    completed_work = [c for c in assigned_complaints if c['technician_status'] == 'Work Completed']
+
+    return render_template('technician_dashboard.html',
+                           current_work=current_work, completed_work=completed_work)
+
+
+@app.route('/complaint/<int:complaint_id>/start-work', methods=['POST'])
+@technician_required
+def technician_start_work(complaint_id):
+    db = get_db()
+    complaint = db_execute(db, "SELECT * FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
+    if not complaint or complaint['assigned_to'] != session['user_id']:
+        flash('You are not assigned to this issue.', 'danger')
+        return redirect(url_for('technician_dashboard'))
+
+    if complaint['technician_status'] != 'Assigned':
+        flash('Cannot start work from current status.', 'warning')
+        return redirect(url_for('technician_dashboard'))
+
+    db_execute(db,
+        "UPDATE complaints SET technician_status = 'Work Started', status = 'In Progress', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (complaint_id,)
+    )
+    tech_name = session.get('name', 'Technician')
+    db_execute(db,
+        "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+        (complaint_id, session['user_id'], f'Technician {tech_name} started work')
+    )
+    db.commit()
+    flash('Work started.', 'success')
+    return redirect(url_for('technician_dashboard'))
+
+
+@app.route('/complaint/<int:complaint_id>/add-note', methods=['POST'])
+@technician_required
+def technician_add_note(complaint_id):
+    note = request.form.get('note', '').strip()
+    if not note:
+        flash('Please enter a work note.', 'warning')
+        return redirect(url_for('technician_dashboard'))
+
+    db = get_db()
+    complaint = db_execute(db, "SELECT * FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
+    if not complaint or complaint['assigned_to'] != session['user_id']:
+        flash('You are not assigned to this issue.', 'danger')
+        return redirect(url_for('technician_dashboard'))
+
+    tech_name = session.get('name', 'Technician')
+    db_execute(db,
+        "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+        (complaint_id, session['user_id'], f'Technician {tech_name} note: {note}')
+    )
+    db.commit()
+    flash('Work note added.', 'success')
+    return redirect(url_for('technician_dashboard'))
+
+
+@app.route('/complaint/<int:complaint_id>/mark-completed', methods=['POST'])
+@technician_required
+def technician_mark_completed(complaint_id):
+    db = get_db()
+    complaint = db_execute(db, "SELECT * FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
+    if not complaint or complaint['assigned_to'] != session['user_id']:
+        flash('You are not assigned to this issue.', 'danger')
+        return redirect(url_for('technician_dashboard'))
+
+    if complaint['technician_status'] not in ('Work Started', 'Assigned'):
+        flash('Cannot mark work completed from current status.', 'warning')
+        return redirect(url_for('technician_dashboard'))
+
+    db_execute(db,
+        "UPDATE complaints SET technician_status = 'Work Completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (complaint_id,)
+    )
+    tech_name = session.get('name', 'Technician')
+    db_execute(db,
+        "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+        (complaint_id, session['user_id'], f'Technician {tech_name} marked work completed')
+    )
+    db.commit()
+    flash('Work marked as completed. Awaiting admin verification.', 'success')
+    return redirect(url_for('technician_dashboard'))
+
+
 # ─── Admin routes ───────────────────────────────────────────────────────────────
 
 @app.route('/admin')
@@ -1309,9 +1502,45 @@ def admin_dashboard():
         "ORDER BY cd.created_at DESC"
     ).fetchall()
 
-    return render_template('admin_dashboard.html', complaints=complaints,
+    # Get all technicians for assign dropdown
+    technicians = db_execute(db,
+        "SELECT id, name FROM users WHERE role = 'technician' ORDER BY name"
+    ).fetchall()
+
+    # Resolve technician names for complaints
+    complaint_list = []
+    for c in complaints:
+        c_dict = dict(c)
+        if c_dict.get('assigned_to'):
+            tech = db_execute(db, "SELECT name FROM users WHERE id = ?", (c_dict['assigned_to'],)).fetchone()
+            c_dict['technician_name'] = tech['name'] if tech else None
+        else:
+            c_dict['technician_name'] = None
+        complaint_list.append(c_dict)
+
+    # Summary counts
+    total_pending = db_execute(db, "SELECT COUNT(*) AS cnt FROM complaints WHERE status = 'Pending'").fetchone()['cnt']
+    total_in_progress = db_execute(db, "SELECT COUNT(*) AS cnt FROM complaints WHERE status = 'In Progress'").fetchone()['cnt']
+    total_work_completed = db_execute(db, "SELECT COUNT(*) AS cnt FROM complaints WHERE technician_status = 'Work Completed'").fetchone()['cnt']
+    total_resolved = db_execute(db, "SELECT COUNT(*) AS cnt FROM complaints WHERE status = 'Resolved'").fetchone()['cnt']
+    total_deps = len(suggested_deps)
+
+    # Recent activity logs (last 20 entries across all complaints)
+    recent_logs = db_execute(db,
+        "SELECT ch.*, u.name AS user_name, c.title AS complaint_title "
+        "FROM complaint_history ch "
+        "JOIN users u ON ch.user_id = u.id "
+        "JOIN complaints c ON ch.complaint_id = c.id "
+        "ORDER BY ch.created_at DESC LIMIT 20"
+    ).fetchall()
+
+    return render_template('admin_dashboard.html', complaints=complaint_list,
                            suggested_deps=suggested_deps,
-                           status_filter=status_filter, category_filter=category_filter)
+                           technicians=technicians,
+                           status_filter=status_filter, category_filter=category_filter,
+                           total_pending=total_pending, total_in_progress=total_in_progress,
+                           total_work_completed=total_work_completed, total_resolved=total_resolved,
+                           total_deps=total_deps, recent_logs=recent_logs)
 
 
 @app.route('/complaint/<int:complaint_id>')
@@ -1373,12 +1602,30 @@ def complaint_detail(complaint_id):
         (complaint_id,)
     ).fetchone()['cnt']
 
+    # Get assigned technician info
+    assigned_technician = None
+    if complaint['assigned_to']:
+        tech = db_execute(db, "SELECT id, name FROM users WHERE id = ?", (complaint['assigned_to'],)).fetchone()
+        if tech:
+            assigned_technician = {'id': tech['id'], 'name': tech['name']}
+
+    # Get all technicians for admin assign dropdown
+    all_technicians = []
+    if session.get('role') == 'admin':
+        all_technicians = db_execute(db, "SELECT id, name FROM users WHERE role = 'technician' ORDER BY name").fetchall()
+
+    # Check if current user is the assigned technician
+    is_assigned_technician = (complaint['assigned_to'] == session.get('user_id'))
+
     return render_template('complaint_detail.html', complaint=complaint,
                            affected_users=affected_users, affected_count=affected_count,
                            history=history,
                            suggested_deps=suggested_deps,
                            confirmed_deps=confirmed_deps,
-                           has_linked_children=has_linked_children)
+                           has_linked_children=has_linked_children,
+                           assigned_technician=assigned_technician,
+                           all_technicians=all_technicians,
+                           is_assigned_technician=is_assigned_technician)
 
 
 @app.route('/complaint/<int:complaint_id>/status', methods=['POST'])
@@ -1443,13 +1690,61 @@ def update_status(complaint_id):
     return redirect(url_for('admin_dashboard'))
 
 
+@app.route('/complaint/<int:complaint_id>/assign-technician', methods=['POST'])
+@admin_required
+def assign_technician(complaint_id):
+    technician_id = request.form.get('technician_id')
+    if not technician_id:
+        flash('Please select a technician.', 'warning')
+        return redirect(request.referrer or url_for('admin_dashboard'))
+
+    db = get_db()
+    complaint = db_execute(db, "SELECT * FROM complaints WHERE id = ?", (complaint_id,)).fetchone()
+    if not complaint:
+        flash('Issue not found.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    technician = db_execute(db, "SELECT id, name FROM users WHERE id = ? AND role = 'technician'", (technician_id,)).fetchone()
+    if not technician:
+        flash('Invalid technician.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    admin_name = session.get('name', 'Admin')
+
+    old_tech_name = None
+    if complaint['assigned_to']:
+        old_tech = db_execute(db, "SELECT name FROM users WHERE id = ?", (complaint['assigned_to'],)).fetchone()
+        old_tech_name = old_tech['name'] if old_tech else None
+
+    # Update assignment
+    db_execute(db,
+        "UPDATE complaints SET assigned_to = ?, technician_status = 'Assigned', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (technician_id, complaint_id)
+    )
+
+    # Add history
+    new_tech_name = technician['name']
+    if old_tech_name:
+        action = f'Admin reassigned issue from {old_tech_name} to {new_tech_name}'
+    else:
+        action = f'Admin assigned issue to {new_tech_name}'
+
+    db_execute(db,
+        "INSERT INTO complaint_history (complaint_id, user_id, action) VALUES (?, ?, ?)",
+        (complaint_id, session['user_id'], action)
+    )
+    db.commit()
+    flash(f'Technician assigned: {new_tech_name}', 'success')
+    return redirect(request.referrer or url_for('admin_dashboard'))
+
+
 # ─── SLA Settings Route ─────────────────────────────────────────────────────────
 
 @app.route('/admin/sla', methods=['GET', 'POST'])
 @admin_required
 def sla_settings():
     db = get_db()
-    categories = ['Electricity', 'Water', 'Wi-Fi', 'Cleanliness', 'Classroom', 'Hostel', 'Other']
+    categories = ['Electricity', 'Water', 'Wi-Fi', 'Cleanliness', 'Classroom', 'Hostel', 'Plumbing', 'Carpentry', 'Other']
     priorities = ['High', 'Medium', 'Low']
 
     if request.method == 'POST':

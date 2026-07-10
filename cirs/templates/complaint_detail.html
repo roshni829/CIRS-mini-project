@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Complaint #{{ complaint.id }} - CIRS</title>
+    <title>Issue #{{ complaint.id }} - CIRS</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -11,18 +11,24 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
-                <h1>{% if session['role'] == 'admin' %}Issue Management{% else %}Issue Portal{% endif %}</h1>
-                <div class="subtitle">CIRS</div>
+                {% if session['role'] == 'admin' %}
+                <h1>Administration</h1>
+                {% elif session['role'] == 'technician' %}
+                <h1>Technician Workspace</h1>
+                {% else %}
+                <h1>Student Portal</h1>
+                {% endif %}
+                <div class="subtitle">Collaborative Issue Resolution System</div>
             </div>
             <div class="sidebar-nav">
-                <a href="{% if session['role'] == 'admin' %}{{ url_for('admin_dashboard') }}{% else %}{{ url_for('user_dashboard') }}{% endif %}">
+                <a href="{% if session['role'] == 'admin' %}{{ url_for('admin_dashboard') }}{% elif session['role'] == 'technician' %}{{ url_for('technician_dashboard') }}{% else %}{{ url_for('user_dashboard') }}{% endif %}">
                     <span class="icon">&#9632;</span>
                     <span>Dashboard</span>
                 </a>
-                {% if session['role'] != 'admin' %}
+                {% if session['role'] == 'user' %}
                 <a href="{{ url_for('submit_complaint') }}">
                     <span class="icon">+</span>
-                    <span>New Complaint</span>
+                    <span>Report Issue</span>
                 </a>
                 {% endif %}
                 <a href="{{ url_for('logout') }}">
@@ -31,16 +37,19 @@
                 </a>
             </div>
             <div class="sidebar-footer">
-                {{ session['name'] }}
+                <strong>{{ session['name'] }}</strong>
+                {% if session['role'] == 'admin' %} &mdash; Administrator
+                {% elif session['role'] == 'technician' %} &mdash; Technician
+                {% else %} &mdash; Student{% endif %}
             </div>
         </div>
 
         <!-- Main Content -->
         <div class="main-content">
             <div class="top-bar">
-                <h2>Complaint #{{ complaint.id }}</h2>
+                <h2>Issue Details &mdash; #{{ complaint.id }}</h2>
                 <div class="user-info">
-                    <a href="{% if session['role'] == 'admin' %}{{ url_for('admin_dashboard') }}{% else %}{{ url_for('user_dashboard') }}{% endif %}" class="btn btn-sm">&larr; Back</a>
+                    <a href="{% if session['role'] == 'admin' %}{{ url_for('admin_dashboard') }}{% elif session['role'] == 'technician' %}{{ url_for('technician_dashboard') }}{% else %}{{ url_for('user_dashboard') }}{% endif %}" class="btn btn-sm">&larr; Back to Dashboard</a>
                 </div>
             </div>
 
@@ -57,6 +66,7 @@
 
             <div class="detail-grid">
                 <div>
+                    <!-- Issue Summary -->
                     <div class="card">
                         <div class="card-body">
                             <div class="detail-section">
@@ -64,6 +74,7 @@
                                 <span class="reported-by">Reported by {{ complaint.creator_name }}</span>
                             </div>
 
+                            <!-- Issue Details -->
                             <div class="field-row">
                                 <div>
                                     <span class="label">Category</span>
@@ -90,72 +101,107 @@
                                         {% else %}badge-success{% endif %}">
                                         {{ complaint.status }}
                                     </span>
-                                </div>
-                                {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
-                                <div style="grid-column:1/-1;">
-                                    <span class="label">Resolution</span>
-                                    <p style="margin:4px 0 0 0;font-size:14px;color:#166534;background:#dcfce7;padding:8px 12px;border-radius:6px;">{{ complaint.resolution_notes }}</p>
-                                </div>
-                                {% endif %}
-                                <div>
-                                    <span class="label">Expected Resolution</span>
-                                    {% set dynamic_time = get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) %}
-                                    <span class="resolution-time {% if complaint.status == 'Resolved' %}completed{% endif %}">{{ dynamic_time }}</span>
-                                    {% if complaint.status != 'Resolved' %}
-                                    <span class="sla-label">Original SLA: {{ get_sla_time(complaint.category, complaint.priority) }}</span>
+                                    {% if complaint.technician_status and complaint.technician_status != 'Not Assigned' %}
+                                    <span class="badge badge-secondary" style="margin-left:6px;">{{ complaint.technician_status }}</span>
                                     {% endif %}
                                 </div>
                             </div>
 
-                            <!-- Current Progress info -->
-                            <div class="progress-info">
-                                <div class="stat">
-                                    <span class="stat-label">Current Progress</span>
-                                    <span class="stat-value">
-                                        <span class="badge
-                                            {% if complaint.status == 'Pending' %}badge-warning
-                                            {% elif complaint.status == 'In Progress' %}badge-info
-                                            {% else %}badge-success{% endif %}">
-                                            {{ complaint.status }}
-                                        </span>
-                                    </span>
-                                </div>
-                                <div class="stat">
-                                    <span class="stat-label">Priority</span>
-                                    <span class="stat-value">
-                                        <span class="badge
-                                            {% if complaint.priority == 'High' %}badge-danger
-                                            {% elif complaint.priority == 'Medium' %}badge-warning
-                                            {% else %}badge-secondary{% endif %}">
-                                            {{ complaint.priority }}
-                                        </span>
-                                    </span>
-                                </div>
-                                <div class="stat">
-                                    <span class="stat-label">Last Updated</span>
-                                    <span class="stat-value" style="font-size:12px;font-weight:400;color:#6b7280;">{{ complaint.updated_at | format_datetime }}</span>
-                                </div>
-                            </div>
-
+                            <!-- Description -->
                             <div class="detail-section">
                                 <span class="label">Description</span>
-                                <p style="margin:4px 0 0 0;font-size:14px;">{{ complaint.description }}</p>
+                                <p style="margin:4px 0 0 0;font-size:14px;line-height:1.6;">{{ complaint.description }}</p>
                             </div>
 
                             <div class="timestamps">
-                                <span>Created: {{ complaint.created_at | format_datetime }}</span>
-                                <span>Updated: {{ complaint.updated_at | format_datetime }}</span>
+                                <span>Reported: {{ complaint.created_at | format_datetime }}</span>
+                                <span>Last Updated: {{ complaint.updated_at | format_datetime }}</span>
                             </div>
 
-                            <!-- Dependency Warnings (for admin, when resolving) -->
-                            {% if session['role'] == 'admin' and has_linked_children > 0 %}
+                            <!-- Linked Issue (if confirmed) -->
+                            {% if confirmed_deps %}
                             <hr class="section-divider">
                             <div class="detail-section">
-                                <span class="label" style="color:#dc2626;">Linked Complaints Notice</span>
+                                <span class="label">&#128279; Linked Issue</span>
+                                {% for dep in confirmed_deps %}
+                                <div class="dependency-item" style="margin-top:10px;">
+                                    <div class="dep-relation">
+                                        <span class="dep-child">{{ dep.complaint_title }}</span>
+                                        <span class="dep-arrow">depends on</span>
+                                        <span class="dep-parent">{{ dep.parent_title }}</span>
+                                    </div>
+                                    <div class="dep-reason" style="color:#6b7280;font-size:12px;">Resolution may depend on this linked issue.</div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
+                            <!-- Assigned Technician -->
+                            <hr class="section-divider">
+                            <div class="detail-section">
+                                <span class="label">&#128295; Assigned Technician</span>
+                                {% if assigned_technician %}
+                                <p style="margin:4px 0 0 0;font-size:14px;font-weight:500;">{{ assigned_technician.name }}</p>
+                                {% if complaint.technician_status and complaint.technician_status != 'Not Assigned' %}
+                                <span class="badge badge-secondary" style="margin-top:4px;">{{ complaint.technician_status }}</span>
+                                {% endif %}
+                                {% else %}
+                                <p style="margin:4px 0 0 0;font-size:14px;color:#9ca3af;">Not yet assigned. Awaiting administration review.</p>
+                                {% endif %}
+
+                                {% if session['role'] == 'admin' %}
+                                <form method="POST" action="{{ url_for('assign_technician', complaint_id=complaint.id) }}" style="display:flex;gap:8px;margin-top:10px;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <select class="form-control" name="technician_id" style="width:auto;">
+                                        <option value="">Select technician...</option>
+                                        {% for tech in all_technicians %}
+                                        <option value="{{ tech.id }}" {% if assigned_technician and assigned_technician.id == tech.id %}selected{% endif %}>{{ tech.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn btn-primary btn-sm">Assign</button>
+                                </form>
+                                {% endif %}
+                            </div>
+
+                            <!-- Expected Resolution -->
+                            <hr class="section-divider">
+                            <div class="detail-section">
+                                <span class="label">Expected Resolution</span>
+                                {% set dynamic_time = get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) %}
+                                <p style="margin:4px 0 0 0;font-size:14px;" class="resolution-time {% if complaint.status == 'Resolved' %}completed{% endif %}">{{ dynamic_time }}</p>
+                                {% if complaint.status != 'Resolved' %}
+                                <span class="sla-label">Original SLA: {{ get_sla_time(complaint.category, complaint.priority) }}</span>
+                                {% endif %}
+                            </div>
+
+                            <!-- Admin Actions: Assign Technician & Update Status -->
+                            {% if session['role'] == 'admin' %}
+                            <hr class="section-divider">
+                            <div class="detail-section">
+                                <span class="label">Update Status</span>
+                                <form method="POST" action="{{ url_for('update_status', complaint_id=complaint.id) }}" style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div style="display:flex;gap:8px;">
+                                        <select class="form-control" name="status" style="width:auto;">
+                                            <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
+                                            <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                                            <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
+                                        </select>
+                                        <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+                                    </div>
+                                    <textarea class="form-control" name="resolution_notes" placeholder="Resolution notes — describe what was done..." style="min-height:60px;">{{ complaint.resolution_notes or '' }}</textarea>
+                                </form>
+                            </div>
+
+                            {% if has_linked_children > 0 %}
+                            <hr class="section-divider">
+                            <div class="detail-section">
+                                <span class="label" style="color:#dc2626;">&#9888; Linked Issues Notice</span>
                                 <p style="font-size:13px;color:#991b1b;margin:4px 0 0 0;">
-                                    This complaint has linked complaints. Please review them before resolving.
+                                    This issue has linked complaints. Please review them before resolving.
                                 </p>
                             </div>
+                            {% endif %}
                             {% endif %}
 
                             <!-- Suggested Dependencies (for admin only) -->
@@ -193,55 +239,19 @@
                                 {% endfor %}
                             </div>
                             {% endif %}
-
-                            <!-- Confirmed Dependencies (for all users) -->
-                            {% if confirmed_deps %}
-                            <hr class="section-divider">
-                            <div class="detail-section">
-                                <span class="label">Linked Issues</span>
-                                {% for dep in confirmed_deps %}
-                                <div class="dependency-item" style="margin-top:10px;">
-                                    <div class="dep-relation">
-                                        <span class="dep-child">{{ dep.complaint_title }}</span>
-                                        <span class="dep-arrow">depends on</span>
-                                        <span class="dep-parent">{{ dep.parent_title }}</span>
-                                    </div>
-                                    <div class="dep-reason" style="color:#6b7280;font-size:12px;">Resolution may depend on this linked issue.</div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                            {% endif %}
-
-                            {% if session['role'] == 'admin' %}
-                            <hr class="section-divider">
-                            <div class="detail-section">
-                                <span class="label">Update Status</span>
-                                <form method="POST" action="{{ url_for('update_status', complaint_id=complaint.id) }}" class="status-update-form" style="flex-direction:column;align-items:stretch;">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <div style="display:flex;gap:8px;">
-                                        <select class="form-control" name="status" style="width:auto;">
-                                            <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
-                                            <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
-                                            <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
-                                        </select>
-                                        <button type="submit" class="btn btn-primary btn-sm">Update</button>
-                                    </div>
-                                    <textarea class="form-control" name="resolution_notes" placeholder="Resolution notes (optional) — describe what was done..." style="min-height:60px;margin-top:8px;">{{ complaint.resolution_notes or '' }}</textarea>
-                                </form>
-                            </div>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
 
                 <div>
+                    <!-- People Affected -->
                     <div class="affected-count-box">
                         <div class="number">{{ affected_count }}</div>
-                        <div class="label">Affected Users</div>
+                        <div class="label">Students Affected</div>
                     </div>
 
                     <div class="card">
-                        <div class="card-header">Joined Users</div>
+                        <div class="card-header">People Involved</div>
                         <div class="card-body user-list">
                             {% for user in affected_users %}
                             <div class="user-row">
@@ -249,19 +259,20 @@
                                 <div>
                                     <div class="user-name">{{ user.name }}</div>
                                     <div class="user-meta">
-                                        {% if user.role_in_complaint == 'creator' %}Creator{% else %}Joined {{ user.joined_at | format_datetime }}{% endif %}
+                                        {% if user.role_in_complaint == 'creator' %}Issue Reporter{% else %}Joined {{ user.joined_at | format_datetime }}{% endif %}
                                     </div>
                                 </div>
                             </div>
                             {% else %}
-                            <div class="empty-mini">No users yet.</div>
+                            <div class="empty-mini">No students involved yet.</div>
                             {% endfor %}
                         </div>
                     </div>
 
+                    <!-- Timeline / Activity History -->
                     {% if history %}
                     <div class="card">
-                        <div class="card-header">Timeline</div>
+                        <div class="card-header">Activity Timeline</div>
                         <div class="card-body">
                             <div class="timeline">
                                 {% for entry in history %}
@@ -270,25 +281,16 @@
                                 <div class="timeline-item">
                                     <div class="timeline-bullet" style="background:{{ event_color }};box-shadow:0 0 0 2px {{ event_color }};"></div>
                                     <div class="timeline-content">
-                                        <div class="timeline-date">{{ entry.created_at | format_date }} • {{ entry.created_at | format_time }}</div>
-                                        <div class="timeline-event">
-                                            {{ event_name }}
-                                            {% if 'changed status to' in entry.action.lower() %}
-                                            <span class="badge
-                                                {%- if 'pending' in entry.action.lower() %}badge-warning
-                                                {%- elif 'in progress' in entry.action.lower() %}badge-info
-                                                {%- elif 'resolved' in entry.action.lower() %}badge-success
-                                                {%- endif %}" style="margin-left:6px;">
-                                                {%- if 'pending' in entry.action.lower() %}Pending
-                                                {%- elif 'in progress' in entry.action.lower() %}In Progress
-                                                {%- elif 'resolved' in entry.action.lower() %}Resolved
-                                                {%- endif -%}
-                                            </span>
-                                            {% endif %}
-                                        </div>
-                                        {% if 'resolved issue' in entry.action.lower() %}
+                                        <div class="timeline-date">{{ entry.created_at | format_date }} &bull; {{ entry.created_at | format_time }}</div>
+                                        <div class="timeline-event">{{ event_name }}</div>
+                                        {% if 'resolved issue' in entry.action.lower() or 'resolved:' in entry.action.lower() %}
                                         <div style="font-size:12px;color:#6b7280;margin-top:2px;">
                                             {{ entry.action.split(':')[1] if ':' in entry.action else '' }}
+                                        </div>
+                                        {% endif %}
+                                        {% if 'note:' in entry.action.lower() %}
+                                        <div style="font-size:12px;color:#6b7280;margin-top:2px;font-style:italic;">
+                                            &ldquo;{{ entry.action.split('note:')[1] if 'note:' in entry.action else '' }}&rdquo;
                                         </div>
                                         {% endif %}
                                     </div>
@@ -299,6 +301,11 @@
                     </div>
                     {% endif %}
                 </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="app-footer" style="margin-top:24px;">
+                Collaborative Issue Resolution System
             </div>
         </div>
     </div>

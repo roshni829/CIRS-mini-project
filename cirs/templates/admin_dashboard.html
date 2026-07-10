@@ -3,16 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Issue Management - CIRS</title>
+    <title>Administration Dashboard - CIRS</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 24px; }
+        .summary-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px 18px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .summary-card .number { font-size: 28px; font-weight: 700; line-height: 1.2; letter-spacing: -0.5px; }
+        .summary-card .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+        .summary-card.card-pending .number { color: #f59e0b; }
+        .summary-card.card-progress .number { color: #3b82f6; }
+        .summary-card.card-assigned .number { color: #8b5cf6; }
+        .summary-card.card-resolved .number { color: #16a34a; }
+        .summary-card.card-deps .number { color: #f97316; }
+        .recent-logs-card { max-height: 300px; overflow-y: auto; }
+    </style>
 </head>
 <body>
     <div class="page-wrapper">
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
-                <h1>Issue Management</h1>
-                <div class="subtitle">CIRS Admin</div>
+                <h1>Administration</h1>
+                <div class="subtitle">Collaborative Issue Resolution System</div>
             </div>
             <div class="sidebar-nav">
                 <a href="{{ url_for('admin_dashboard') }}" class="active">
@@ -29,17 +41,20 @@
                 </a>
             </div>
             <div class="sidebar-footer">
-                {{ session['name'] }}
+                <strong>{{ session['name'] }}</strong> &mdash; Administrator
             </div>
         </div>
 
         <!-- Main Content -->
         <div class="main-content">
             <div class="top-bar">
-                <h2>All Complaints</h2>
+                <div>
+                    <h2>Administration Dashboard</h2>
+                    <p class="page-subtitle">Monitor, assign and resolve campus issues.</p>
+                </div>
                 <div class="user-info">
                     <span class="name">{{ session['name'] }}</span>
-                    <span class="count-label">{{ complaints|length }} total</span>
+                    <span class="count-label">{{ complaints|length }} total issues</span>
                 </div>
             </div>
 
@@ -54,11 +69,35 @@
                 {% endif %}
             {% endwith %}
 
+            <!-- Summary Cards -->
+            <div class="summary-cards">
+                <div class="summary-card card-pending">
+                    <div class="number">{{ total_pending }}</div>
+                    <div class="label">Open Issues</div>
+                </div>
+                <div class="summary-card card-progress">
+                    <div class="number">{{ total_in_progress }}</div>
+                    <div class="label">In Progress</div>
+                </div>
+                <div class="summary-card card-assigned">
+                    <div class="number">{{ total_work_completed }}</div>
+                    <div class="label">Awaiting Verification</div>
+                </div>
+                <div class="summary-card card-resolved">
+                    <div class="number">{{ total_resolved }}</div>
+                    <div class="label">Resolved</div>
+                </div>
+                <div class="summary-card card-deps">
+                    <div class="number">{{ total_deps }}</div>
+                    <div class="label">Dependency Suggestions</div>
+                </div>
+            </div>
+
             <!-- Suggested Linked Issues -->
             <div class="card">
                 <div class="card-header">
                     Suggested Linked Issues
-                    <span class="count-label">{{ suggested_deps|length }} pending</span>
+                    <span class="count-label">{{ suggested_deps|length }} pending review</span>
                 </div>
                 <div class="card-body">
                     {% if suggested_deps %}
@@ -92,7 +131,8 @@
                         {% endfor %}
                     {% else %}
                         <div class="empty-state">
-                            <p>No dependency suggestions found.</p>
+                            <span class="empty-icon">&#128200;</span>
+                            <p>No dependency suggestions available.</p>
                         </div>
                     {% endif %}
                 </div>
@@ -117,6 +157,8 @@
                             <option value="Wi-Fi" {% if category_filter == 'Wi-Fi' %}selected{% endif %}>Wi-Fi</option>
                             <option value="Electricity" {% if category_filter == 'Electricity' %}selected{% endif %}>Electricity</option>
                             <option value="Water" {% if category_filter == 'Water' %}selected{% endif %}>Water</option>
+                            <option value="Plumbing" {% if category_filter == 'Plumbing' %}selected{% endif %}>Plumbing</option>
+                            <option value="Carpentry" {% if category_filter == 'Carpentry' %}selected{% endif %}>Carpentry</option>
                             <option value="Cleanliness" {% if category_filter == 'Cleanliness' %}selected{% endif %}>Cleanliness</option>
                             <option value="Classroom" {% if category_filter == 'Classroom' %}selected{% endif %}>Classroom</option>
                             <option value="Hostel" {% if category_filter == 'Hostel' %}selected{% endif %}>Hostel</option>
@@ -124,7 +166,7 @@
                         </select>
                     </div>
                     <div class="filter-actions">
-                        <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                        <button type="submit" class="btn btn-primary btn-sm">Apply Filters</button>
                         {% if status_filter or category_filter %}
                             <a href="{{ url_for('admin_dashboard') }}" class="btn btn-sm">Clear</a>
                         {% endif %}
@@ -132,19 +174,26 @@
                 </form>
             </div>
 
+            <!-- All Issues Table -->
             <div class="card">
+                <div class="card-header">
+                    All Issues
+                    <span class="count-label">{{ complaints|length }}</span>
+                </div>
                 <div class="table-wrapper">
                     <table>
                         <thead>
                             <tr>
-                                <th>Complaint</th>
+                                <th>Issue</th>
                                 <th>Category</th>
+                                <th>Cause</th>
                                 <th>Location</th>
                                 <th>Affected</th>
                                 <th>Priority</th>
                                 <th>Expected Resolution</th>
                                 <th>Status</th>
-                                <th></th>
+                                <th>Assigned Technician</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -156,9 +205,10 @@
                                             <div class="meta">by {{ complaint.creator_name }}</div>
                                         </td>
                                         <td>{{ complaint.category }}</td>
+                                        <td>{{ complaint.issue_type or '-' }}</td>
                                         <td>{{ complaint.location }}</td>
                                         <td>
-                                            <span id="count-{{ complaint.id }}" class="affected-count">{{ complaint.affected_users }}</span>
+                                            <span class="affected-count">{{ complaint.affected_users }}</span>
                                         </td>
                                         <td>
                                             <span class="badge
@@ -172,36 +222,57 @@
                                             <span class="resolution-time {% if complaint.status == 'Resolved' %}completed{% endif %}">{{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
                                         </td>
                                         <td>
-                                            <span id="status-{{ complaint.id }}" class="badge
+                                            <span class="badge
                                                 {% if complaint.status == 'Pending' %}badge-warning
                                                 {% elif complaint.status == 'In Progress' %}badge-info
                                                 {% else %}badge-success{% endif %}">
                                                 {{ complaint.status }}
                                             </span>
-                                        </td>
-                                        <td>
-                                            <form method="POST" action="{{ url_for('update_status', complaint_id=complaint.id) }}" class="status-form">
-                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                <select name="status">
-                                                    <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
-                                                    <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
-                                                    <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
-                                                </select>
-                                                <button type="submit" class="btn btn-sm">Update</button>
-                                            </form>
-                                            {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
-                                            <div style="font-size:11px;color:#166534;margin-top:4px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ complaint.resolution_notes }}">
-                                                {{ complaint.resolution_notes }}
+                                            {% if complaint.technician_status and complaint.technician_status != 'Not Assigned' %}
+                                            <div style="font-size:11px;color:#6b7280;margin-top:2px;">
+                                                <span style="display:inline-block;background:#f3f4f6;padding:1px 6px;border-radius:3px;">{{ complaint.technician_status }}</span>
                                             </div>
                                             {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if complaint.technician_name %}
+                                                <span style="font-size:12px;color:#374151;font-weight:500;">{{ complaint.technician_name }}</span>
+                                            {% else %}
+                                                <span style="color:#9ca3af;font-size:12px;">Not Assigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div style="display:flex;flex-direction:column;gap:3px;min-width:140px;">
+                                                <form method="POST" action="{{ url_for('assign_technician', complaint_id=complaint.id) }}" style="display:flex;gap:3px;">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <select name="technician_id" style="padding:3px 6px;font-size:11px;border:1.5px solid #d1d5db;border-radius:5px;max-width:110px;">
+                                                        <option value="">Assign...</option>
+                                                        {% for tech in technicians %}
+                                                        <option value="{{ tech.id }}" {% if complaint.assigned_to == tech.id %}selected{% endif %}>{{ tech.name }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                    <button type="submit" class="btn btn-sm" style="padding:2px 7px;font-size:11px;">Go</button>
+                                                </form>
+                                                <form method="POST" action="{{ url_for('update_status', complaint_id=complaint.id) }}" style="display:flex;gap:3px;">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <select name="status" style="font-size:11px;padding:3px 6px;border:1.5px solid #d1d5db;border-radius:5px;">
+                                                        <option value="Pending" {% if complaint.status == 'Pending' %}selected{% endif %}>Pending</option>
+                                                        <option value="In Progress" {% if complaint.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                                                        <option value="Resolved" {% if complaint.status == 'Resolved' %}selected{% endif %}>Resolved</option>
+                                                    </select>
+                                                    <button type="submit" class="btn btn-sm" style="padding:2px 7px;font-size:11px;">Save Changes</button>
+                                                </form>
+                                                <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm" style="font-size:11px;padding:2px 7px;">View Logs</a>
+                                            </div>
                                         </td>
                                     </tr>
                                 {% endfor %}
                             {% else %}
                                 <tr>
-                                    <td colspan="8">
+                                    <td colspan="10">
                                         <div class="empty-state">
-                                            <p>No complaints found.</p>
+                                            <span class="empty-icon">&#128203;</span>
+                                            <p>No issues found.</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -209,6 +280,33 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <!-- Recent Activity Logs -->
+            {% if recent_logs %}
+            <div class="card">
+                <div class="card-header">
+                    Recent Activity Logs
+                    <span class="count-label">Last 20 entries</span>
+                </div>
+                <div class="card-body recent-logs-card">
+                    {% for log in recent_logs %}
+                    <div class="activity-item">
+                        <div class="time">{{ log.created_at | format_datetime }}</div>
+                        <div class="desc">
+                            <span class="comp-title">{{ log.complaint_title }}</span>
+                            <span style="color:#6b7280;">&mdash;</span>
+                            {{ log.action }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Footer -->
+            <div class="app-footer">
+                Collaborative Issue Resolution System
             </div>
         </div>
     </div>

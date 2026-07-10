@@ -4,12 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register - CIRS</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="auth-page">
     <div class="auth-box">
         <h2>Create Account</h2>
-        <p class="subtitle">Register to submit and track complaints.</p>
+        <p class="subtitle">Register to report and track campus issues.</p>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}

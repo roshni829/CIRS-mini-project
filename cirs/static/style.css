@@ -1532,6 +1532,201 @@ table .meta {
     }
 }
 
+/* ─── Technician Dashboard ──────────────────────────────────────────────── */
+
+.tech-action-form {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.tech-note-input {
+    width: 140px;
+    padding: 4px 8px;
+    font-size: 12px;
+    border: 1.5px solid #d1d5db;
+    border-radius: 6px;
+    font-family: inherit;
+}
+
+.tech-note-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+/* ─── Assign Technician Form ─────────────────────────────────────────────── */
+
+.assign-form {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+}
+
+.assign-form select {
+    padding: 3px 6px;
+    font-size: 11px;
+    border: 1.5px solid #d1d5db;
+    border-radius: 6px;
+    font-family: inherit;
+    background: #fff;
+    cursor: pointer;
+    max-width: 120px;
+}
+
+.assign-form select:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+/* ─── Technician Badge ───────────────────────────────────────────────────── */
+
+.technician-badge {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.technician-badge span {
+    display: inline-block;
+    background: #f3f4f6;
+    padding: 2px 8px;
+    border-radius: 4px;
+    color: #374151;
+    font-weight: 500;
+}
+
+/* ─── Admin Summary Cards ────────────────────────────────────────────────── */
+
+.tech-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.tech-status-indicator::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.tech-status-indicator.status-assigned::before {
+    background: #3b82f6;
+}
+
+.tech-status-indicator.status-work-started::before {
+    background: #f59e0b;
+}
+
+.tech-status-indicator.status-work-completed::before {
+    background: #22c55e;
+}
+
+/* ─── Activity Log (admin) ───────────────────────────────────────────────── */
+
+.activity-log-item {
+    display: flex;
+    gap: 10px;
+    padding: 8px 12px;
+    font-size: 12px;
+    border-bottom: 1px solid #f3f4f6;
+    align-items: flex-start;
+}
+
+.activity-log-item:last-child {
+    border-bottom: none;
+}
+
+.activity-log-item .log-time {
+    color: #9ca3af;
+    white-space: nowrap;
+    font-size: 11px;
+    min-width: 65px;
+    flex-shrink: 0;
+}
+
+.activity-log-item .log-action {
+    color: #1f2937;
+}
+
+.activity-log-item .log-complaint {
+    font-weight: 500;
+    color: #4b5563;
+}
+
+/* ─── Page Subtitle ─────────────────────────────────────────────────────── */
+
+.page-subtitle {
+    font-size: 13px;
+    color: #6b7280;
+    margin: 4px 0 0 0;
+    max-width: 480px;
+    line-height: 1.5;
+}
+
+/* ─── Footer ─────────────────────────────────────────────────────────────── */
+
+.app-footer {
+    text-align: center;
+    padding: 20px 0 8px;
+    font-size: 12px;
+    color: #9ca3af;
+    border-top: 1px solid #e5e7eb;
+    margin-top: 20px;
+    letter-spacing: 0.2px;
+}
+
+/* ─── Category Icons Detail ─────────────────────────────────────────────── */
+
+.category-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: #f3f4f6;
+    font-size: 14px;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+/* ─── Workflow Section Labels ───────────────────────────────────────────── */
+
+.section-label {
+    font-size: 10px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: block;
+}
+
+/* ─── Technician Status Badge Colors ─────────────────────────────────────── */
+
+.badge-purple {
+    background: #f3e8ff;
+    color: #6b21a8;
+}
+.badge-purple::before { background: #a855f7; }
+
+.badge-orange {
+    background: #fff7ed;
+    color: #c2410c;
+}
+.badge-orange::before { background: #f97316; }
+
+.badge-blue {
+    background: #eff6ff;
+    color: #1e40af;
+}
+.badge-blue::before { background: #3b82f6; }
+
 @media (max-width: 480px) {
     .auth-box {
         padding: 24px 20px 20px;

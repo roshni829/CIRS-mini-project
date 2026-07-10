@@ -8,8 +8,8 @@
 </head>
 <body class="auth-page">
     <div class="auth-box">
-        <h2>Login</h2>
-        <p class="subtitle">Enter your email and password to continue.</p>
+        <h2>Welcome</h2>
+        <p class="subtitle">Collaborative Issue Resolution System. Sign in to your account to continue.</p>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -26,13 +26,13 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="email">Email</label>
-                <input type="email" class="form-control" id="email" name="email" required placeholder="you@example.com">
+                <input type="email" class="form-control" id="email" name="email" required placeholder="you@campus.edu">
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
                 <input type="password" class="form-control" id="password" name="password" required placeholder="Enter your password">
             </div>
-            <button type="submit" class="btn btn-primary btn-block">Login</button>
+            <button type="submit" class="btn btn-primary btn-block">Sign In</button>
         </form>
 
         <div class="auth-footer-link">
@@ -41,9 +41,16 @@
 
         <div class="demo-info">
             <strong>Demo accounts</strong><br>
-            User: <code>student1@cirs.com</code> / <code>student123</code><br>
+            Student: <code>student1@cirs.com</code> / <code>student123</code><br>
+            Student: <code>student2@cirs.com</code> / <code>student123</code><br>
             Admin: <code>admin@cirs.com</code> / <code>admin123</code><br>
-            User: <code>student2@cirs.com</code> / <code>student123</code>
+            &#128295; Technician: <code>plumber@cirs.com</code> / <code>tech123</code><br>
+            &#128295; Technician: <code>electrician@cirs.com</code> / <code>tech123</code><br>
+            &#128295; Technician: <code>carpenter@cirs.com</code> / <code>tech123</code>
+        </div>
+
+        <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;">
+            Collaborative Issue Resolution System
         </div>
     </div>
 

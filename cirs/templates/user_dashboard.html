@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Issue Portal - CIRS</title>
+    <title>Student Dashboard - CIRS</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -11,8 +11,8 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
-                <h1>Issue Portal</h1>
-                <div class="subtitle">CIRS</div>
+                <h1>Student Portal</h1>
+                <div class="subtitle">Collaborative Issue Resolution System</div>
             </div>
             <div class="sidebar-nav">
                 <a href="{{ url_for('user_dashboard') }}" class="active">
@@ -21,7 +21,7 @@
                 </a>
                 <a href="{{ url_for('submit_complaint') }}">
                     <span class="icon">+</span>
-                    <span>New Complaint</span>
+                    <span>Report Issue</span>
                 </a>
                 <a href="{{ url_for('logout') }}">
                     <span class="icon">&larr;</span>
@@ -29,17 +29,20 @@
                 </a>
             </div>
             <div class="sidebar-footer">
-                {{ session['name'] }}
+                <strong>{{ session['name'] }}</strong> &mdash; Student
             </div>
         </div>
 
         <!-- Main Content -->
         <div class="main-content">
             <div class="top-bar">
-                <h2>Dashboard</h2>
+                <div>
+                    <h2>Student Dashboard</h2>
+                    <p class="page-subtitle">Track the progress of your reported issues and browse campus-wide concerns.</p>
+                </div>
                 <div class="user-info">
                     <span class="name">{{ session['name'] }}</span>
-                    <a href="{{ url_for('submit_complaint') }}" class="btn btn-primary btn-sm">+ New Complaint</a>
+                    <a href="{{ url_for('submit_complaint') }}" class="btn btn-primary btn-sm">+ Report Issue</a>
                 </div>
             </div>
 
@@ -54,18 +57,29 @@
                 {% endif %}
             {% endwith %}
 
-            <!-- Complaints Raised by Me -->
+            <!-- Section 1: My Raised Issues -->
             <div class="card">
                 <div class="card-header">
-                    Complaints Raised by Me
-                    <span class="count-label">{{ my_complaints|length }} total</span>
+                    My Raised Issues
+                    <span class="count-label">{{ my_complaints|length }}</span>
                 </div>
                 <div class="card-body">
                     {% if my_complaints %}
                         {% for complaint in my_complaints %}
                             <div class="complaint-item">
                                 <div class="title-row">
-                                    <h4>{{ complaint.title }}</h4>
+                                    <h4>
+                                        {% if complaint.category == 'Electricity' %}&#9889;
+                                        {% elif complaint.category == 'Water' or complaint.category == 'Plumbing' %}&#128167;
+                                        {% elif complaint.category == 'Wi-Fi' %}&#128246;
+                                        {% elif complaint.category == 'Cleanliness' %}&#129529;
+                                        {% elif complaint.category == 'Carpentry' %}&#128736;
+                                        {% elif complaint.category == 'Classroom' %}&#127891;
+                                        {% elif complaint.category == 'Hostel' %}&#127968;
+                                        {% else %}&#128203;
+                                        {% endif %}
+                                        {{ complaint.title }}
+                                    </h4>
                                     <span id="status-{{ complaint.id }}" class="badge
                                         {% if complaint.status == 'Pending' %}badge-warning
                                         {% elif complaint.status == 'In Progress' %}badge-info
@@ -83,8 +97,11 @@
                                         {% else %}badge-secondary{% endif %}">
                                         {{ complaint.priority }}
                                     </span>
-                                    <span>Expected Resolution: {{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
-                                    <span>Last Updated: {{ complaint.updated_at | format_datetime }}</span>
+                                    <span>{{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
+                                    <span>Updated {{ complaint.updated_at | format_datetime }}</span>
+                                    {% if complaint.technician_name %}
+                                    <span>&#128295; {{ complaint.technician_name }}</span>
+                                    {% endif %}
                                 </div>
                                 {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
                                 <div class="resolution-note">Resolution: {{ complaint.resolution_notes }}</div>
@@ -92,37 +109,49 @@
                                 {% if confirmed_deps and complaint.id in confirmed_deps %}
                                 <div class="linked-info">
                                     {% for dep in confirmed_deps[complaint.id] %}
-                                    <span class="linked-issue">Linked issue: {{ dep.parent_title }}</span>
+                                    <span class="linked-issue">&#128279; Linked issue: {{ dep.parent_title }}</span>
                                     {% endfor %}
                                     <span class="linked-note">Resolution may depend on this linked issue.</span>
                                 </div>
                                 {% endif %}
                                 <div class="actions">
-                                    <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View</a>
+                                    <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details</a>
                                 </div>
                             </div>
                         {% endfor %}
                     {% else %}
                         <div class="empty-state">
-                            <p>No issues found.</p>
-                            <a href="{{ url_for('submit_complaint') }}" class="btn btn-primary btn-sm">Submit an issue</a>
+                            <span class="empty-icon">&#128203;</span>
+                            <p>You haven't reported any issues yet.</p>
+                            <a href="{{ url_for('submit_complaint') }}" class="btn btn-primary btn-sm">Report an Issue</a>
                         </div>
                     {% endif %}
                 </div>
             </div>
 
-            <!-- Complaints I Joined -->
+            <!-- Section 2: Issues I Joined -->
             <div class="card">
                 <div class="card-header">
-                    Complaints I Joined
-                    <span class="count-label">{{ joined|length }} total</span>
+                    Issues I Joined
+                    <span class="count-label">{{ joined|length }}</span>
                 </div>
                 <div class="card-body">
                     {% if joined %}
                         {% for complaint in joined %}
                             <div class="complaint-item">
                                 <div class="title-row">
-                                    <h4>{{ complaint.title }}</h4>
+                                    <h4>
+                                        {% if complaint.category == 'Electricity' %}&#9889;
+                                        {% elif complaint.category == 'Water' or complaint.category == 'Plumbing' %}&#128167;
+                                        {% elif complaint.category == 'Wi-Fi' %}&#128246;
+                                        {% elif complaint.category == 'Cleanliness' %}&#129529;
+                                        {% elif complaint.category == 'Carpentry' %}&#128736;
+                                        {% elif complaint.category == 'Classroom' %}&#127891;
+                                        {% elif complaint.category == 'Hostel' %}&#127968;
+                                        {% else %}&#128203;
+                                        {% endif %}
+                                        {{ complaint.title }}
+                                    </h4>
                                     <span id="status-{{ complaint.id }}" class="badge
                                         {% if complaint.status == 'Pending' %}badge-warning
                                         {% elif complaint.status == 'In Progress' %}badge-info
@@ -140,8 +169,11 @@
                                         {% else %}badge-secondary{% endif %}">
                                         {{ complaint.priority }}
                                     </span>
-                                    <span>Expected Resolution: {{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
-                                    <span>Joined: {{ complaint.joined_on | format_datetime }}</span>
+                                    <span>{{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
+                                    <span>Joined {{ complaint.joined_on | format_datetime }}</span>
+                                    {% if complaint.technician_name %}
+                                    <span>&#128295; {{ complaint.technician_name }}</span>
+                                    {% endif %}
                                 </div>
                                 {% if complaint.status == 'Resolved' and complaint.resolution_notes %}
                                 <div class="resolution-note">Resolution: {{ complaint.resolution_notes }}</div>
@@ -149,36 +181,48 @@
                                 {% if confirmed_deps and complaint.id in confirmed_deps %}
                                 <div class="linked-info">
                                     {% for dep in confirmed_deps[complaint.id] %}
-                                    <span class="linked-issue">Linked issue: {{ dep.parent_title }}</span>
+                                    <span class="linked-issue">&#128279; Linked issue: {{ dep.parent_title }}</span>
                                     {% endfor %}
                                     <span class="linked-note">Resolution may depend on this linked issue.</span>
                                 </div>
                                 {% endif %}
                                 <div class="actions">
-                                    <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View</a>
+                                    <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details</a>
                                 </div>
                             </div>
                         {% endfor %}
                     {% else %}
                         <div class="empty-state">
-                            <p>No issues found.</p>
+                            <span class="empty-icon">&#128101;</span>
+                            <p>You haven't joined any existing issues. Browse campus issues below to add your support.</p>
                         </div>
                     {% endif %}
                 </div>
             </div>
 
-            <!-- Open Complaints (for joining) -->
+            <!-- Section 3: Existing Campus Issues -->
             <div class="card">
                 <div class="card-header">
-                    Open Complaints
-                    <span class="count-label">{{ open_complaints|length }} total</span>
+                    Existing Campus Issues
+                    <span class="count-label">{{ open_complaints|length }}</span>
                 </div>
                 <div class="card-body">
                     {% if open_complaints %}
                         {% for complaint in open_complaints %}
                             <div class="complaint-item">
                                 <div class="title-row">
-                                    <h4>{{ complaint.title }}</h4>
+                                    <h4>
+                                        {% if complaint.category == 'Electricity' %}&#9889;
+                                        {% elif complaint.category == 'Water' or complaint.category == 'Plumbing' %}&#128167;
+                                        {% elif complaint.category == 'Wi-Fi' %}&#128246;
+                                        {% elif complaint.category == 'Cleanliness' %}&#129529;
+                                        {% elif complaint.category == 'Carpentry' %}&#128736;
+                                        {% elif complaint.category == 'Classroom' %}&#127891;
+                                        {% elif complaint.category == 'Hostel' %}&#127968;
+                                        {% else %}&#128203;
+                                        {% endif %}
+                                        {{ complaint.title }}
+                                    </h4>
                                     <span id="status-{{ complaint.id }}" class="badge
                                         {% if complaint.status == 'Pending' %}badge-warning
                                         {% elif complaint.status == 'In Progress' %}badge-info
@@ -189,31 +233,40 @@
                                 <div class="details">
                                     <span>{{ complaint.category }}</span>
                                     <span>{{ complaint.location }}</span>
-                                    <span id="count-{{ complaint.id }}">{{ complaint.affected_users }} affected</span>
+                                    <span id="count-{{ complaint.id }}">{{ complaint.affected_users }} students affected</span>
                                     <span class="badge
                                         {% if complaint.priority == 'High' %}badge-danger
                                         {% elif complaint.priority == 'Medium' %}badge-warning
                                         {% else %}badge-secondary{% endif %}">
                                         {{ complaint.priority }}
                                     </span>
-                                    <span>Expected Resolution: {{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
-                                    <span>by {{ complaint.creator_name }}</span>
+                                    <span>{{ get_dynamic_expected_time(complaint.category, complaint.priority, complaint.status) }}</span>
+                                    <span>Reported by {{ complaint.creator_name }}</span>
+                                    {% if complaint.technician_name %}
+                                    <span>&#128295; {{ complaint.technician_name }}</span>
+                                    {% endif %}
                                 </div>
                                 <div class="actions">
                                     <form method="POST" action="{{ url_for('join_complaint', complaint_id=complaint.id) }}" class="inline-form">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <button type="submit" class="btn btn-success btn-sm">Join</button>
+                                        <button type="submit" class="btn btn-success btn-sm">Join Existing Issue</button>
                                     </form>
-                                    <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View</a>
+                                    <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details</a>
                                 </div>
                             </div>
                         {% endfor %}
                     {% else %}
                         <div class="empty-state">
-                            <p>No open complaints to join.</p>
+                            <span class="empty-icon">&#128200;</span>
+                            <p>All campus issues have been addressed. No open issues to join at this time.</p>
                         </div>
                     {% endif %}
                 </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="app-footer">
+                Collaborative Issue Resolution System
             </div>
         </div>
     </div>
