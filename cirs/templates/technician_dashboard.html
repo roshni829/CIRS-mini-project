@@ -38,7 +38,7 @@
                 </div>
                 <div class="user-info">
                     <span class="name">{{ session['name'] }}</span>
-                    <span class="count-label">{{ complaints|length }} assigned</span>
+                    <span class="count-label">{{ (current_work|length + completed_work|length) }} assigned</span>
                 </div>
             </div>
 
@@ -53,7 +53,7 @@
                 {% endif %}
             {% endwith %}
 
-            {% if complaints %}
+            {% if current_work or completed_work %}
                 <!-- Current Work (Assigned / Work Started) -->
                 {% if current_work %}
                 <div class="card">
@@ -190,16 +190,6 @@
                 </div>
                 {% endif %}
 
-                {% if not current_work and not completed_work %}
-                <div class="card">
-                    <div class="card-body">
-                        <div class="empty-state">
-                            <span class="empty-icon">&#128203;</span>
-                            <p>No issues assigned to you.</p>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
             {% else %}
                 <div class="card">
                     <div class="card-body">
