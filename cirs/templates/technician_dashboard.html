@@ -104,27 +104,7 @@
                                                 {% else %}badge-amber{% endif %}">{{ complaint.technician_status }}</span>
                                         </td>
                                         <td>
-                                            <div style="display:flex;flex-direction:column;gap:4px;">
-                                                {% if complaint.technician_status == 'Assigned' %}
-                                                    <form method="POST" action="{{ url_for('technician_start_work', complaint_id=complaint.id) }}">
-                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                        <button type="submit" class="btn btn-primary btn-sm">Start Work</button>
-                                                    </form>
-                                                {% endif %}
-                                                {% if complaint.technician_status == 'Work Started' %}
-                                                    <form method="POST" action="{{ url_for('technician_mark_completed', complaint_id=complaint.id) }}">
-                                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                        <button type="submit" class="btn btn-success btn-sm">Mark Completed</button>
-                                                    </form>
-                                                {% endif %}
-                                                <button class="btn btn-sm" onclick="document.getElementById('note-{{ complaint.id }}').style.display='flex'">Add Note</button>
-                                                <form id="note-{{ complaint.id }}" method="POST" action="{{ url_for('technician_add_note', complaint_id=complaint.id) }}" style="display:none;gap:4px;">
-                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                    <input type="text" name="note" placeholder="Work note..." style="flex:1;padding:4px 8px;font-size:12px;border:1.5px solid var(--gray-300);border-radius:5px;" required>
-                                                    <button type="submit" class="btn btn-sm btn-primary">Add</button>
-                                                </form>
-                                                <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">Details</a>
-                                            </div>
+                                            <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details &rarr;</a>
                                         </td>
                                     </tr>
                                 {% endfor %}
@@ -169,7 +149,7 @@
                                             <span class="badge badge-gray">{{ complaint.technician_status }}</span>
                                             <div style="font-size:11px;color:var(--green-500);font-weight:500;margin-top:2px;">Awaiting admin verification</div>
                                         </td>
-                                        <td><a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">Details</a></td>
+                                        <td><a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details &rarr;</a></td>
                                     </tr>
                                 {% endfor %}
                             </tbody>

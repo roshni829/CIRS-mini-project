@@ -154,6 +154,40 @@
                                     <button type="submit" class="btn btn-primary btn-sm">Assign Technician</button>
                                 </form>
                                 {% endif %}
+
+                                <!-- Technician Actions -->
+                                {% if session['role'] == 'technician' and is_assigned_technician %}
+                                <div style="margin-top:12px;padding:14px;background:var(--blue-50);border:1px solid #bfdbfe;border-radius:var(--radius);">
+                                    <div style="font-size:12px;font-weight:600;color:var(--blue-700);margin-bottom:8px;">&#128295; Your Actions</div>
+                                    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                                        {% if complaint.technician_status == 'Assigned' %}
+                                        <form method="POST" action="{{ url_for('technician_start_work', complaint_id=complaint.id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-primary btn-sm">&#9654; Start Work</button>
+                                        </form>
+                                        {% endif %}
+                                        {% if complaint.technician_status in ('Assigned', 'Work Started') %}
+                                        <button class="btn btn-sm" onclick="var f=this.nextElementSibling;f.style.display=f.style.display==='none'?'flex':'none'">&#128221; Add Work Note</button>
+                                        <form method="POST" action="{{ url_for('technician_add_note', complaint_id=complaint.id) }}" style="display:none;gap:6px;width:100%;margin-top:6px;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="text" name="note" placeholder="Describe what you did..." style="flex:1;padding:7px 10px;font-size:13px;border:1.5px solid var(--gray-300);border-radius:5px;font-family:inherit;" required>
+                                            <button type="submit" class="btn btn-primary btn-sm">Add</button>
+                                        </form>
+                                        {% endif %}
+                                        {% if complaint.technician_status == 'Work Started' %}
+                                        <form method="POST" action="{{ url_for('technician_mark_completed', complaint_id=complaint.id) }}" onsubmit="return confirm('Mark this work as completed? The admin will verify before closing.');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-success btn-sm">&#9989; Mark Work Completed</button>
+                                        </form>
+                                        {% endif %}
+                                        {% if complaint.technician_status == 'Work Completed' %}
+                                        <span style="font-size:13px;color:var(--green-600);font-weight:500;">&#9989; Work submitted — awaiting admin verification</span>
+                                        {% elif complaint.technician_status not in ('Assigned', 'Work Started') %}
+                                        <span style="font-size:13px;color:var(--gray-500);">No actions available for this issue.</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
                             </div>
 
                             <!-- Dependency Analysis (for admin) -->

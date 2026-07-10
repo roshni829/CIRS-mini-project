@@ -77,53 +77,35 @@
                 </div>
             </div>
 
-            <!-- Suggested Linked Issues -->
-            <div class="card">
-                <div class="card-header">
-                    Suggested Linked Issues
-                    <span class="count-label">{{ suggested_deps|length }} pending review</span>
-                </div>
-                <div class="card-body">
-                    {% if suggested_deps %}
-                        <div class="attention-list">
-                            {% for dep in suggested_deps %}
-                            <div class="attention-item">
-                                <div class="attention-icon">&#128279;</div>
-                                <div class="attention-body">
-                                    <div class="attention-title">{{ dep.complaint_title }}</div>
-                                    <div class="attention-meta">may depend on {{ dep.parent_title }} &mdash; {{ dep.confidence }} confidence</div>
-                                </div>
-                                <div class="attention-action" style="display:flex;gap:4px;">
-                                    <form method="POST" action="{{ url_for('confirm_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <button type="submit" class="btn btn-success btn-sm">Confirm</button>
-                                    </form>
-                                    <form method="POST" action="{{ url_for('ignore_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <button type="submit" class="btn btn-sm">Ignore</button>
-                                    </form>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <div class="empty-state">
-                            <span class="empty-icon">&#128200;</span>
-                            <p>No dependency suggestions available.</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Needs Attention -->
-            {% if needs_assign or needs_verify %}
+            <!-- Needs Attention — Combined Section -->
             <div class="card">
                 <div class="card-header">
                     Needs Attention
-                    <span class="count-label">{{ (needs_assign|length + needs_verify|length) }} items</span>
+                    <span class="count-label">{{ (needs_assign|length + needs_verify|length + suggested_deps|length) }} items</span>
                 </div>
                 <div class="card-body">
                     <div class="attention-list">
+                        <!-- Dependency Suggestions -->
+                        {% for dep in suggested_deps %}
+                        <div class="attention-item">
+                            <div class="attention-icon">&#128279;</div>
+                            <div class="attention-body">
+                                <div class="attention-title">{{ dep.complaint_title }}</div>
+                                <div class="attention-meta">may depend on {{ dep.parent_title }} &mdash;<span class="badge {% if dep.confidence == 'High' %}badge-red{% else %}badge-amber{% endif %}" style="font-size:10px;padding:0 6px;">{{ dep.confidence }} confidence</span></div>
+                            </div>
+                            <div class="attention-action" style="display:flex;gap:4px;">
+                                <form method="POST" action="{{ url_for('confirm_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-success btn-sm">Confirm</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('ignore_dependency', complaint_id=dep.complaint_id, dep_id=dep.id) }}" style="display:inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm">Ignore</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        <!-- Awaiting Technician Assignment -->
                         {% for complaint in needs_assign[:3] %}
                         <div class="attention-item">
                             <div class="attention-icon">&#9888;</div>
@@ -136,28 +118,69 @@
                             </div>
                         </div>
                         {% endfor %}
+                        <!-- Awaiting Verification -->
                         {% for complaint in needs_verify[:3] %}
                         <div class="attention-item">
                             <div class="attention-icon">&#9989;</div>
                             <div class="attention-body">
                                 <div class="attention-title">{{ complaint.title }}</div>
-                                <div class="attention-meta">Technician completed work — awaiting admin verification</div>
+                                <div class="attention-meta">Work completed — awaiting admin verification</div>
                             </div>
                             <div class="attention-action">
                                 <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-primary btn-sm">Verify</a>
                             </div>
                         </div>
                         {% endfor %}
+                        {% if not suggested_deps and not needs_assign and not needs_verify %}
+                        <div class="empty-state" style="padding:20px;">
+                            <span class="empty-icon">&#9989;</span>
+                            <p>All issues are on track. Nothing requires immediate attention.</p>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-            {% endif %}
 
-            <!-- All Issues Table -->
-            <div class="card">
+            <!-- Recent Issues — Table with Filter Bar Above -->
+            <div class="filter-bar" style="margin-bottom:0;border-radius:var(--radius-lg) var(--radius-lg) 0 0;">
+                <form method="GET" action="{{ url_for('admin_dashboard') }}" class="filter-form">
+                    <div class="filter-group">
+                        <label for="status">Status</label>
+                        <select name="status" id="status" class="form-control filter-select">
+                            <option value="">All</option>
+                            <option value="Pending" {% if status_filter == 'Pending' %}selected{% endif %}>Pending</option>
+                            <option value="In Progress" {% if status_filter == 'In Progress' %}selected{% endif %}>In Progress</option>
+                            <option value="Needs Review" {% if status_filter == 'Needs Review' %}selected{% endif %}>Needs Review</option>
+                            <option value="Resolved" {% if status_filter == 'Resolved' %}selected{% endif %}>Resolved</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="category">Category</label>
+                        <select name="category" id="category" class="form-control filter-select">
+                            <option value="">All</option>
+                            <option value="Wi-Fi">Wi-Fi</option>
+                            <option value="Electricity">Electricity</option>
+                            <option value="Water">Water</option>
+                            <option value="Plumbing">Plumbing</option>
+                            <option value="Carpentry">Carpentry</option>
+                            <option value="Cleanliness">Cleanliness</option>
+                            <option value="Classroom">Classroom</option>
+                            <option value="Hostel">Hostel</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="filter-actions">
+                        <button type="submit" class="btn btn-sm">Apply</button>
+                        {% if status_filter or category_filter %}
+                            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-ghost btn-sm">Clear</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+            <div class="card" style="border-top-left-radius:0;border-top-right-radius:0;">
                 <div class="card-header">
-                    All Issues
-                    <span class="count-label">{{ complaints|length }}</span>
+                    Recent Issues
+                    <span class="count-label">{{ complaints|length }} total</span>
                 </div>
                 <div class="table-wrapper">
                     <table>
@@ -206,14 +229,14 @@
                                         </td>
                                         <td style="font-size:12px;color:var(--gray-400);">{{ complaint.updated_at | format_datetime }}</td>
                                         <td>
-                                            <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details</a>
+                                            <a href="{{ url_for('complaint_detail', complaint_id=complaint.id) }}" class="btn btn-sm">View Details &rarr;</a>
                                         </td>
                                     </tr>
                                 {% endfor %}
                             {% else %}
                                 <tr>
                                     <td colspan="7">
-                                        <div class="empty-state"><p>No issues found.</p></div>
+                                        <div class="empty-state"><p>No issues found matching your filters.</p></div>
                                     </td>
                                 </tr>
                             {% endif %}
@@ -222,47 +245,7 @@
                 </div>
             </div>
 
-            <!-- Filter Bar -->
-            <div class="filter-bar">
-                <form method="GET" action="{{ url_for('admin_dashboard') }}" class="filter-form">
-                    <div class="filter-group">
-                        <label for="status">Status</label>
-                        <select name="status" id="status" class="form-control filter-select">
-                            <option value="">All</option>
-                            <option value="Pending" {% if status_filter == 'Pending' %}selected{% endif %}>Pending</option>
-                            <option value="In Progress" {% if status_filter == 'In Progress' %}selected{% endif %}>In Progress</option>
-                            <option value="Needs Review" {% if status_filter == 'Needs Review' %}selected{% endif %}>Needs Review</option>
-                            <option value="Resolved" {% if status_filter == 'Resolved' %}selected{% endif %}>Resolved</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label for="category">Category</label>
-                        <select name="category" id="category" class="form-control filter-select">
-                            <option value="">All</option>
-                            <option value="Wi-Fi">Wi-Fi</option>
-                            <option value="Electricity">Electricity</option>
-                            <option value="Water">Water</option>
-                            <option value="Plumbing">Plumbing</option>
-                            <option value="Carpentry">Carpentry</option>
-                            <option value="Cleanliness">Cleanliness</option>
-                            <option value="Classroom">Classroom</option>
-                            <option value="Hostel">Hostel</option>
-                            <option value="Other">Other</option>
-                        </select>
-                    </div>
-                    <div class="filter-actions">
-                        <button type="submit" class="btn btn-sm">Apply</button>
-                        {% if status_filter or category_filter %}
-                            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-ghost btn-sm">Clear</a>
-                        {% endif %}
-                    </div>
-                </form>
-            </div>
-
-            <!-- Footer + Hidden Admin Actions -->
-            <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:14px;">
-                <div class="app-footer" style="margin-top:0;border:none;padding:0;">Collaborative Issue Resolution System</div>
-            </div>
+            <div class="app-footer">Collaborative Issue Resolution System</div>
         </div>
     </div>
     <script src="{{ url_for('static', filename='script.js') }}"></script>
