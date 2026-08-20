@@ -16,15 +16,21 @@ csrf = CSRFProtect(app)
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 if not DATABASE_URL:
-    raise RuntimeError(
-        "DATABASE_URL environment variable is required. "
-        "Set it to your PostgreSQL connection string, e.g.: "
-        "postgresql://user:password@host:port/dbname"
-    )
+    # Fallback: Neon PostgreSQL (update this if the database changes)
+    DATABASE_URL = 'postgresql://neondb_owner:npg_Mg9r4CXnuzmd@ep-aged-frost-aycgiw14.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require'
 
 # Render provides DATABASE_URL starting with 'postgres://' but psycopg2 requires 'postgresql://'
 if DATABASE_URL.startswith('postgres://'):
     DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
+# Strip any extra whitespace or quotes that might sneak in from env vars
+DATABASE_URL = DATABASE_URL.strip().strip('"').strip("'")
+
+# Ensure sslmode is set for external databases (Neon, Supabase, etc.)
+if '?' not in DATABASE_URL:
+    DATABASE_URL += '?sslmode=require'
+elif 'sslmode' not in DATABASE_URL:
+    DATABASE_URL += '&sslmode=require'
 
 
 # ─── Database layer (PostgreSQL only) ──────────────────────────────────────────
