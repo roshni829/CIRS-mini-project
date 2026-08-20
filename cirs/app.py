@@ -14,7 +14,11 @@ app.secret_key = "cirs-mini-project-fixed-secret-key"
 app.permanent_session_lifetime = timedelta(hours=3)
 csrf = CSRFProtect(app)
 
-DATABASE_URL = 'postgresql://neondb_owner:npg_Mg9r4CXnuzmd@ep-aged-frost-aycgiw14.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require'
+DATABASE_URL = os.environ.get('NEON_DATABASE_URL', 'postgresql://neondb_owner:npg_Mg9r4CXnuzmd@ep-aged-frost-aycgiw14.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require')
+
+# Render provides DATABASE_URL starting with 'postgres://' but psycopg2 requires 'postgresql://'
+if DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
 
 
 # ─── Database layer (PostgreSQL only) ──────────────────────────────────────────
