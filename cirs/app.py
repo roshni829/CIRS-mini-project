@@ -22,6 +22,10 @@ if not DATABASE_URL:
         "postgresql://user:password@host:port/dbname"
     )
 
+# Render provides DATABASE_URL starting with 'postgres://' but psycopg2 requires 'postgresql://'
+if DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+
 
 # ─── Database layer (PostgreSQL only) ──────────────────────────────────────────
 
@@ -58,6 +62,17 @@ def db_execute(db, sql, params=None):
 
 
 app.teardown_appcontext(close_db)
+
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Render / uptime monitors."""
+    try:
+        db = get_db()
+        db_execute(db, "SELECT 1")
+        return jsonify({'status': 'healthy'}), 200
+    except Exception as e:
+        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
 
 def _infer_issue_type(category, title, description):
